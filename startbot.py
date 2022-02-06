@@ -87,7 +87,7 @@ async def echo(websocket, path):
                             "params": {"group_id": "649451770", 
                             "message": "[CQ:image,file=base64://{}]".format(getRandom())
                     }}))
-                    return
+                    continue
                 try:
                     if is_all_chinese(realmessage):
                         content = zh(realmessage, "zh")
