@@ -1,4 +1,6 @@
-from email import message
+# -*- coding: utf-8 -*-
+from __future__ import unicode_literals
+
 import requests
 import json
 import base64
@@ -7,7 +9,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from random import randrange
 from utils import userid
-
+from urllib import parse
 recommendList = None
 updateTime = 0
 
@@ -23,7 +25,9 @@ def getImage(picPath):
     }
     r = requests.get(url=picPath, headers=headers)
     return base64.b64encode(r.content).decode('utf-8')
-
+def getPin(url):
+    r = requests.get(url)
+    return base64.b64encode(r.content).decode('utf-8')
 def getList():
     r = requests.get("https://www.pixiv.net/touch/ajax/recommender/top?limit=500&lang=jp")
     message = r.json()
@@ -53,16 +57,57 @@ def SearchPainter(id):
     r = requests.get("https://www.pixiv.net/touch/ajax/user/illusts?id={}&type=illust&lang=en".format(id))
     message = r.json()
     if message["error"]:
-        return 1
+        return json.dumps({"error": "画师{}不存在！".format(id)})
     if int(message["body"]["lastPage"]) > 1:
         r = requests.get("https://www.pixiv.net/touch/ajax/user/illusts?id={}&type=illust&lang=en&p={}".format(id, randrange(1, message["body"]["lastPage"])))
         message = r.json()
-    return getImage(message["body"]["illusts"][randrange(0, len(message["body"]["illusts"])-1)]["url"])
+    
+    url = message["body"]["illusts"][randrange(0, len(message["body"]["illusts"])-1)]["url"]
+    return json.dumps({
+        "b64": getImage(url), 
+        "from": url
+    })
 
 def getRandom():
     userlen = len(userid) - 1
     uid = userid[randrange(0, userlen)]
     return SearchPainter(uid)
+
+def getName(name, num):
+    r = requests.get(url='https://www.pixiv.net/touch/ajax/tag_portal?word={}&lang=en'.format(name))
+    message = r.json()
+    b64lists = []
+    #print(message)
+    for i, m in enumerate(message["body"]["illusts"]):
+        if i == int(num):
+            break
+        b64lists.append(getImage(m["url"]))
+    return json.dumps(b64lists)
+
+def getPinterest(name, num):
+    payload = json.dumps(
+        {
+            "options": {
+                "query":name,
+                "scope": "pins",
+                "page_size":100,
+                "no_fetch_context_on_resource": False
+            },
+            "context": {}
+        }
+    )
+    sourceurl = "/search/pins/?q={}&rs=sitelinks_searchbox".format(name)
+    r = requests.get('https://www.pinterest.com/resource/BaseSearchResource/get/?data={}'.format(payload))
+    message = r.json()
+    #print(message)
+    b64list = []
+    if "resource_response" in message:
+        for _ in range(int(num)):
+            try:
+                b64list.append(getPin(message["resource_response"]["data"]["results"][randrange(0,99)]["images"]["orig"]["url"]))
+            except KeyError:
+                continue
+    return json.dumps(b64list)
 
 
 class Handler(BaseHTTPRequestHandler) :
@@ -78,6 +123,21 @@ class Handler(BaseHTTPRequestHandler) :
                 message = getRandom()
                 self._set_headers(len(message))
                 self.wfile.write(message.encode('utf-8'))
+            if "getname" in self.path:
+                query = parse.parse_qs(parse.urlparse(parse.unquote(self.path)).query)
+                if len(query) == 0:
+                    self.wfile.write(json.dumps({"error": "参数错误"}).encode('utf-8'))
+                message = getName(query["name"][0], query["num"][0])
+                self._set_headers(len(message))
+                self.wfile.write(message.encode('utf-8'))
+            if "getpin" in self.path:
+                query = parse.parse_qs(parse.urlparse(parse.unquote(self.path)).query)
+                if len(query) == 0:
+                    self.wfile.write(json.dumps({"error": "参数错误"}).encode('utf-8'))
+                print(query["name"][0])
+                message = getPinterest(query["name"][0], query["num"][0])
+                self._set_headers(len(message))
+                self.wfile.write(message.encode('utf-8'))
 
-s = HTTPServer( ('172.30.199.164', 6700), Handler )
+s = HTTPServer( ('172.30.56.22', 6700), Handler )
 s.serve_forever()
