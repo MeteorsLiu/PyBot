@@ -11,7 +11,7 @@ if __name__ == "__main__":
     driver = webdriver.Chrome(executable_path='/usr/bin/chromedriver', chrome_options=options) 
     namelist = []
     try:
-        with open("test.txt", "a") as myfile:
+        with open("jieba_dict/userdict.txt", "a") as myfile:
             nextPage = "https://zh.moegirl.org.cn/index.php?title=Category:%E4%BA%BA%E7%89%A9&from=A"
             page = 0
             while nextPage:
