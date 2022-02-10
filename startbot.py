@@ -42,9 +42,9 @@ client = None
 
 def is_all_chinese(strs):
     for _char in strs:
-        if not '\u4e00' <= _char <= '\u9fa5':
-            return False
-    return True
+        if '\u4e00' <= _char <= '\u9fa5':
+            return True
+    return False
 
 def unicodeToAscii(s):
     return ''.join(
@@ -80,7 +80,7 @@ async def sendRandomPic(websocket, times):
                 "params": {"group_id": "649451770", 
                 "message": "[CQ:image,file=base64://{}]".format(r["b64"])
         }}))
-    await sendMessage(websocket, "作品URL: {}".format(r["from"]))
+        await sendMessage(websocket, "画师ID:{}, 画师名字: {}".format(r["from"]["uid"], r["from"]["uname"]))
 
 async def searchPicAndSend(websocket, name, times):
     try:
@@ -95,8 +95,9 @@ async def searchPicAndSend(websocket, name, times):
                 json.dumps(
                 {"action": "send_group_msg", 
                 "params": {"group_id": "649451770", 
-                "message": "[CQ:image,file=base64://{}]".format(m)
+                "message": "[CQ:image,file=base64://{}]".format(m["b64"])
             }}))
+            await sendMessage(websocket, "画师ID:{}, 画师名字: {}".format(m["from"]["uid"], m["from"]["uname"]))
     except Exception as e:
         raise e
 
@@ -122,10 +123,25 @@ async def searchPinterest(websocket, word, num):
                 "message": "[CQ:image,file=base64://{}]".format(m)
         }}))
 
+async def searchPicByID(websocket, ids):
+    for id in ids:
+        r = requests.get("http://172.30.56.22:6700/getbyid?id={}".format(id))
+        message = r.json()
+        if "error" in message:
+            await sendMessage(websocket, message["error"])
+            return
+        await websocket.send(
+            json.dumps(
+            {"action": "send_group_msg", 
+            "params": {"group_id": "649451770", 
+            "message": "[CQ:image,file=base64://{}]".format(message["b64"])
+        }}))
+        
+
 async def matchAction(websocket, sentence):
     try:
-        matched, texts = rule.smatch(sentence, '获取照片')    
-        drawMatched, weedict, andict = rule.match(texts, [('搜索', 'v'), ('动画', 'n'), ('图片', 'n')], '动画')
+        matched, texts = rule.smatch(sentence, ['获取', '照片'])    
+        drawMatched, weedict, andict = rule.match(texts, [('搜索', 'v'), ('动画', 'n'), ('图片', 'n'), ('兽性', 'n')], '动画')
     except:
         return False
     flag = False
@@ -147,12 +163,18 @@ async def matchAction(websocket, sentence):
  
 
 async def matchName(websocket, sentence):
-    matched, _ = rule.smatch(sentence, '获取名字')
+    matched, _ = rule.smatch(sentence, ['获取', '名字', '个性'])
     if matched:
         await sendMessage(websocket, "我叫Atri噢")
         return True
     return False
 
+async def matchPainter(websocket, sentence):
+    matched, t = rule.smatch(sentence, ['搜索', '画师', 'id'])
+    if matched:
+        await searchPicByID(websocket, [i for i,f in t if f == 'eng' and i.isdigit()])
+        return True
+    return False
 
 
 def getRobot(sentence):
@@ -170,7 +192,7 @@ def getTencent(sentence):
         resp = client.ChatBot(req)
     except:
         return "腾讯云接口错误"
-    return resp.Reply
+    return re.sub('(腾讯|小龙女)', 'Atri', resp.Reply)
 
 async def sendPic(ws, path):
     try:
@@ -193,21 +215,11 @@ async def echo(websocket, path):
         if "sender" in message and "message" in message:
             _t = message["message"].lower().strip()
             if "!随机" in message["message"]:
-                await websocket.send(
-                    json.dumps(
-                        {"action": "send_group_msg", 
-                        "params": {"group_id": "649451770", 
-                        "message": "[CQ:image,file=base64://{}]".format(getRandom())
-                    }}))
+                await sendRandomPic(websocket, 1)
             if "atri" in _t:
                 realmessage = re.sub("^atri(。|，|？|！|\?|\!|\.|\,)?", '', _t)
                 if "发张图" in realmessage or ("发" in realmessage and "图" in realmessage):
-                    await websocket.send(
-                        json.dumps(
-                            {"action": "send_group_msg", 
-                            "params": {"group_id": "649451770", 
-                            "message": "[CQ:image,file=base64://{}]".format(getRandom())
-                    }}))
+                    await sendRandomPic(websocket, 1)
                 isChinese = False
                 if is_all_chinese(realmessage):
                     isChinese = True
@@ -222,21 +234,22 @@ async def echo(websocket, path):
                 ret = await matchName(websocket, wordseg)
                 if ret:
                     continue
-                
+                ret = await matchPainter(websocket, wordseg)
+                if ret:
+                    continue
   
                 try:
                     if isChinese:
                         content = zh(realmessage, "zh")
                     else:
-                        realmessage = normalizeString(realmessage)
                         content = en(realmessage, "en")
                         content = ' '.join(content)
                 except KeyError:
-                    randint = randrange(0,50)
-                    if randint % 2 == 0:
-                        content = getRobot(realmessage)
-                    else:
-                        content = getTencent(realmessage)
+                    #randint = randrange(0,50)
+                    #if randint % 2 == 0:
+                    #    content = getRobot(realmessage)
+                    #else:
+                    content = getTencent(realmessage)
                 await websocket.send(
                     json.dumps(
                         {"action": "send_group_msg", 
@@ -247,26 +260,21 @@ async def echo(websocket, path):
             if "CQ:at" in message["message"] and "2301059398" in message["message"]:
                 realmessage = re.sub(r'^\[.*?\]', '', message["message"]).strip()
                 if "发张图" in realmessage or ("发" in realmessage and "图" in realmessage):
-                    await websocket.send(
-                        json.dumps(
-                            {"action": "send_group_msg", 
-                            "params": {"group_id": "649451770", 
-                            "message": "[CQ:image,file=base64://{}]".format(getRandom())
-                    }}))
+                    await sendRandomPic(websocket, 1)
                     continue
                 try:
                     if is_all_chinese(realmessage):
                         content = zh(realmessage, "zh")
                     else:
-                        realmessage = normalizeString(realmessage)
                         content = en(realmessage, "en")
                         content = ' '.join(content)
                 except KeyError:
-                    randint = randrange(0,50)
-                    if randint % 2 == 0:
-                        content = getRobot(realmessage)
-                    else:
-                        content = getTencent(realmessage)
+                    #randint = randrange(0,50)
+                    #if randint % 2 == 0:
+                    #    content = getRobot(realmessage)
+                    #else:
+                    content = getTencent(realmessage)
+
 
                 await websocket.send(
                     json.dumps(
@@ -301,3 +309,4 @@ if __name__ == "__main__":
         asyncio.get_event_loop().run_until_complete(main())
     except:
         raise
+
