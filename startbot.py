@@ -138,10 +138,10 @@ async def searchPicByID(websocket, ids):
         }}))
         
 
-async def matchAction(websocket, sentence):
+async def matchAction(websocket, sentence, e):
     try:
         matched, texts = rule.smatch(sentence, ['获取', '照片'])    
-        drawMatched, weedict, andict = rule.match(texts, [('搜索', 'v'), ('动画', 'n'), ('图片', 'n'), ('兽性', 'n')], '动画')
+        drawMatched, weedict, andict = rule.match(texts, [('搜索', 'v'), ('动画', 'n'), ('图片', 'n'), ('兽迷', 'n')], '动画')
     except:
         return False
     flag = False
@@ -159,20 +159,24 @@ async def matchAction(websocket, sentence):
     if "_pic" in andict and matched:
         await sendRandomPic(websocket, andict["_pic"])
         flag = True
+    if flag:
+        e.set()
     return flag
  
 
-async def matchName(websocket, sentence):
+async def matchName(websocket, sentence, e):
     matched, _ = rule.smatch(sentence, ['获取', '名字', '个性'])
     if matched:
         await sendMessage(websocket, "我叫Atri噢")
+        e.set()
         return True
     return False
 
-async def matchPainter(websocket, sentence):
+async def matchPainter(websocket, sentence, e):
     matched, t = rule.smatch(sentence, ['搜索', '画师', 'id'])
     if matched:
         await searchPicByID(websocket, [i for i,f in t if f == 'eng' and i.isdigit()])
+        e.set()
         return True
     return False
 
@@ -192,7 +196,7 @@ def getTencent(sentence):
         resp = client.ChatBot(req)
     except:
         return "腾讯云接口错误"
-    return re.sub('(腾讯|小龙女)', 'Atri', resp.Reply)
+    return re.sub('(腾讯)?小龙女', 'Atri', resp.Reply)
 
 async def sendPic(ws, path):
     try:
@@ -226,18 +230,16 @@ async def echo(websocket, path):
                     realmessage = normalizeChinese(realmessage)
                 else:
                     realmessage = normalizeString(realmessage)
-                ret = False
                 wordseg = rule.word_segment_text_bank(realmessage)
-                ret = await matchAction(websocket, wordseg)
-                if ret:
+                event = asyncio.Event()
+                ret = await asyncio.gather(
+                    matchAction(websocket, wordseg, event),
+                    matchName(websocket, wordseg, event),
+                    matchPainter(websocket, wordseg, event)
+                )
+                if event.is_set():
+                    event.clear()
                     continue
-                ret = await matchName(websocket, wordseg)
-                if ret:
-                    continue
-                ret = await matchPainter(websocket, wordseg)
-                if ret:
-                    continue
-  
                 try:
                     if isChinese:
                         content = zh(realmessage, "zh")
