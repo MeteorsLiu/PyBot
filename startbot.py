@@ -85,10 +85,10 @@ async def sendRandomPic(websocket, times):
 async def searchPicAndSend(websocket, name, times):
     try:
         r = requests.get("http://172.30.56.22:6700/getname?name={}&num={}".format(name, times))
-        message = json.loads(r.content.decode('utf-8'))
+        message = r.json()
         #print(message)
         if "error" in message:
-            await sendMessage(websocket, r["error"])
+            await sendMessage(websocket, message["error"])
             return
         for m in message:
             await websocket.send(
@@ -113,7 +113,7 @@ async def searchPinterest(websocket, word, num):
     r = requests.get("http://172.30.56.22:6700/getpin?name={}&num={}".format(word, num))
     message = r.json()
     if "error" in message:
-        await sendMessage(websocket, r["error"])
+        await sendMessage(websocket, message["error"])
         return
     for m in message:
         await websocket.send(
@@ -289,6 +289,7 @@ async def echo(websocket, path):
 async def main():
     async with websockets.serve(echo, "127.0.0.1", 6750):
         await asyncio.Future()  # run forever
+
 
 
 if __name__ == "__main__":
