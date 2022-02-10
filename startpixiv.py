@@ -62,10 +62,13 @@ def SearchPainter(id):
         r = requests.get("https://www.pixiv.net/touch/ajax/user/illusts?id={}&type=illust&lang=en&p={}".format(id, randrange(1, message["body"]["lastPage"])))
         message = r.json()
     
-    url = message["body"]["illusts"][randrange(0, len(message["body"]["illusts"])-1)]["url"]
+    randlink = message["body"]["illusts"][randrange(0, len(message["body"]["illusts"])-1)]
     return json.dumps({
-        "b64": getImage(url), 
-        "from": url
+        "b64": getImage(randlink["url"]), 
+        "from": {
+            "uid": randlink["author_details"]["user_id"],
+            "uname": randlink["author_details"]["user_name"]
+        }
     })
 
 def getRandom():
@@ -74,14 +77,22 @@ def getRandom():
     return SearchPainter(uid)
 
 def getName(name, num):
-    r = requests.get(url='https://www.pixiv.net/touch/ajax/tag_portal?word={}&lang=en'.format(name))
+    r = requests.get(url='https://www.pixiv.net/touch/ajax/search/illusts?include_meta=0&type=illust_and_ugoira&s_mode=s_tag_full&word={}&lang=en'.format(name))
     message = r.json()
     b64lists = []
+    if int(message["body"]["lastPage"]) > 1:
+        r = requests.get(url='https://www.pixiv.net/touch/ajax/search/illusts?include_meta=0&type=illust_and_ugoira&s_mode=s_tag_full&word={}&lang=en&p={}'.format(name, randrange(1, message["body"]["lastPage"])))
+        message = r.json()
     #print(message)
-    for i, m in enumerate(message["body"]["illusts"]):
-        if i == int(num):
-            break
-        b64lists.append(getImage(m["url"]))
+    for _ in range(int(num)):
+        randlink = message["body"]["illusts"][randrange(0, len(message["body"]["illusts"])-1)]
+        b64lists.append({
+        "b64":    getImage(randlink["url"]),
+        "from": {
+            "uid": randlink["author_details"]["user_id"],
+            "uname": randlink["author_details"]["user_name"]
+            }
+        })
     return json.dumps(b64lists)
 
 def getPinterest(name, num):
@@ -106,9 +117,8 @@ def getPinterest(name, num):
             try:
                 b64list.append(getPin(message["resource_response"]["data"]["results"][randrange(0,99)]["images"]["orig"]["url"]))
             except KeyError:
-                continue
+                return json.dumps({"error": "关键词{}不存在！".format(name)})
     return json.dumps(b64list)
-
 
 class Handler(BaseHTTPRequestHandler) :
         # A new Handler is created for every incommming request tho do_XYZ
@@ -134,8 +144,14 @@ class Handler(BaseHTTPRequestHandler) :
                 query = parse.parse_qs(parse.urlparse(parse.unquote(self.path)).query)
                 if len(query) == 0:
                     self.wfile.write(json.dumps({"error": "参数错误"}).encode('utf-8'))
-                print(query["name"][0])
                 message = getPinterest(query["name"][0], query["num"][0])
+                self._set_headers(len(message))
+                self.wfile.write(message.encode('utf-8'))
+            if "getbyid" in self.path:
+                query = parse.parse_qs(parse.urlparse(parse.unquote(self.path)).query)
+                if len(query) == 0:
+                    self.wfile.write(json.dumps({"error": "参数错误"}).encode('utf-8'))
+                message = SearchPainter(query["id"][0])
                 self._set_headers(len(message))
                 self.wfile.write(message.encode('utf-8'))
 
