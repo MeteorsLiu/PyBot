@@ -18,4 +18,4 @@ wget "https://www.space.ntu.edu.tw/webrelay/directdownload/ijGa2fGe7MbFvals/?dis
 
 ![Word2vec](https://github.com/MeteorsLiu/PyBot/raw/main/pics/MommyTalk1644679385634.jpg)
 
-f(s) 既最终句子与关键词的分数，建议阈值 >= 0.7
+f(s) 既最终句子与关键词的分数，建议阈值 f(s) >= 0.7
