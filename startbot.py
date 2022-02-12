@@ -21,6 +21,7 @@ from tencentcloud.common.exception.tencent_cloud_sdk_exception import TencentClo
 from tencentcloud.nlp.v20190408 import nlp_client
 from tencentcloud.nlp.v20190408 import models as m
 import re
+from collections import Counter
 from match import Rule
 
 
@@ -39,6 +40,7 @@ zh = None
 en = None
 rule = None
 client = None
+loop = asyncio.get_event_loop()
 
 def is_all_chinese(strs):
     for _char in strs:
@@ -108,7 +110,13 @@ async def sendMessage(websocket, m):
             "params": {"group_id": "649451770", 
             "message": m           
     }}))
-
+async def sendVideo(websocket, l):
+    await websocket.send(
+            json.dumps(
+            {"action": "send_group_msg", 
+            "params": {"group_id": "649451770", 
+            "message": "[CQ:video,file={}]".format(l)
+    }}))
 async def searchPinterest(websocket, word, num):
     r = requests.get("http://172.30.56.22:6700/getpin?name={}&num={}".format(word, num))
     message = r.json()
@@ -137,15 +145,52 @@ async def searchPicByID(websocket, ids):
             "message": "[CQ:image,file=base64://{}]".format(message["b64"])
         }}))
         
+async def getWeibo(websocket, l):
+        r = requests.get("http://172.30.56.22:6700/repost?link={}".format(l))
+        message = r.json()
+        if "error" in message:
+            await sendMessage(websocket, message["error"])
+            return
+        await sendMessage(websocket, "作者："+message["author"])
+        if "content" in message:
+            await sendMessage(websocket, "内容："+message["content"])
+        if "b64" in message:
+            for m in message["b64"]:
+                await websocket.send(
+                    json.dumps(
+                    {"action": "send_group_msg", 
+                    "params": {"group_id": "649451770", 
+                    "message": "[CQ:image,file=base64://{}]".format(m)
+                }}))
+        if "video" in message:
+            await sendVideo(websocket, message["video"])
+
+async def getBaidu(s):
+    return await loop.run_in_executor(None, rule.word_segment_text_bank, s)
+
+async def getNonBaidu(s):
+    return await loop.run_in_executor(None,rule.word_segment_text_bank_no_paddle, s)
+
+async def getF(s):
+    ret = await asyncio.gather(getBaidu(s), getNonBaidu(s))
+    lenFirst = sum(Counter([f for _, f in ret[0] if 'm' in f or 'q' in f]).values())
+    lenSecond = sum(Counter([f for _, f in ret[1] if 'm' in f or 'q' in f]).values())
+
+    if lenFirst > lenSecond:
+        print(ret[0])
+        return ret[0]
+    else:
+        print(ret[1])
+        return ret[1]
 
 async def matchAction(websocket, sentence, e):
     try:
-        matched, texts = rule.smatch(sentence, ['获取', '照片'])    
+        matched, texts = rule.smatch(sentence, ['获取', '吸吸', '查看', '搜索', '照片', '图片', '图'])    
         drawMatched, weedict, andict = rule.match(texts, [('搜索', 'v'), ('动画', 'n'), ('图片', 'n'), ('兽迷', 'n')], '动画')
     except:
         return False
     flag = False
-    if len(weedict) > 0 and drawMatched:
+    if len(weedict) > 0 and drawMatched and matched:
         for w in weedict:
             await sendMessage(websocket, "搜索{}{}张照片".format(w,weedict[w]))
             await searchPicAndSend(websocket, w, weedict[w])
@@ -175,11 +220,21 @@ async def matchName(websocket, sentence, e):
 async def matchPainter(websocket, sentence, e):
     matched, t = rule.smatch(sentence, ['搜索', '画师', 'id'])
     if matched:
-        await searchPicByID(websocket, [i for i,f in t if f == 'eng' and i.isdigit()])
+        await searchPicByID(websocket, [i for i,f in t if (f == 'eng' or f == 'm') and i.isdigit()])
         e.set()
         return True
     return False
 
+async def matchFreeLink(websocket, sentence, e):
+    matched, _ = rule.smatch(sentence, ['获取', '订阅'])
+    if matched:
+        await sendMessage(websocket, "https://network.tw/trojan.yml")
+        e.set()
+        return True
+    return False
+
+
+    
 
 def getRobot(sentence):
     r = requests.get("http://api.qingyunke.com/api.php?key=free&appid=0&msg={}".format(sentence))
@@ -220,6 +275,11 @@ async def echo(websocket, path):
             _t = message["message"].lower().strip()
             if "!随机" in message["message"]:
                 await sendRandomPic(websocket, 1)
+                continue
+            if "转发微博" in message["message"]:
+                link = re.sub("转发微博(。|，|？|！|\?|\!|\.|\,|：|:)?", '', _t)
+                await getWeibo(websocket, link)
+                continue
             if "atri" in _t:
                 realmessage = re.sub("^atri(。|，|？|！|\?|\!|\.|\,)?", '', _t)
                 if "发张图" in realmessage or ("发" in realmessage and "图" in realmessage):
@@ -228,18 +288,19 @@ async def echo(websocket, path):
                 if is_all_chinese(realmessage):
                     isChinese = True
                     realmessage = normalizeChinese(realmessage)
+                    wordseg = await getF(realmessage)
+                    event = asyncio.Event()
+                    await asyncio.gather(
+                        matchAction(websocket, wordseg, event),
+                        matchPainter(websocket, wordseg, event),
+                        matchFreeLink(websocket, wordseg, event)
+                    )
+                    if event.is_set():
+                        event.clear()
+                        continue
                 else:
                     realmessage = normalizeString(realmessage)
-                wordseg = rule.word_segment_text_bank(realmessage)
-                event = asyncio.Event()
-                ret = await asyncio.gather(
-                    matchAction(websocket, wordseg, event),
-                    matchName(websocket, wordseg, event),
-                    matchPainter(websocket, wordseg, event)
-                )
-                if event.is_set():
-                    event.clear()
-                    continue
+
                 try:
                     if isChinese:
                         content = zh(realmessage, "zh")
@@ -291,7 +352,6 @@ async def echo(websocket, path):
 async def main():
     async with websockets.serve(echo, "127.0.0.1", 6750):
         await asyncio.Future()  # run forever
-
 
 
 if __name__ == "__main__":
