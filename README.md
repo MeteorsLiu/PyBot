@@ -16,4 +16,4 @@ wget "https://www.space.ntu.edu.tw/webrelay/directdownload/ijGa2fGe7MbFvals/?dis
 
 # 基于Word2Vec匹配原理及相关算法
 
-![Word2vec](https://github.com/MeteorsLiu/PyBot/raw/main/pics/MommyTalk1644679117364.jpg)
+![Word2vec](https://github.com/MeteorsLiu/PyBot/raw/main/pics/MommyTalk1644679385634.jpg)
