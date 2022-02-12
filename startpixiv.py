@@ -110,6 +110,8 @@ def getRandom():
 
 """
 根据关键词搜索Pixiv，并抽取随机一个画作，返回其Base64 值
+
+返回值：JSON_ARRAY(图片base64)
 """
 def getName(name, num):
     r = requests.get(url='https://www.pixiv.net/touch/ajax/search/illusts?include_meta=0&type=illust_and_ugoira&s_mode=s_tag_full&word={}&lang=en'.format(name))
@@ -132,6 +134,8 @@ def getName(name, num):
 
 """
 根据关键词搜索Pinterest，并随机抽取一个，返回其Base64值
+
+返回值：JSON_ARRAY(图片base64)
 """
 def getPinterest(name, num):
     payload = json.dumps(
