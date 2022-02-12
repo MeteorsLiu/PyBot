@@ -6,7 +6,7 @@ import json
 import base64
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
-
+import re
 from random import randrange
 from utils import userid
 from urllib import parse
@@ -115,10 +115,36 @@ def getPinterest(name, num):
     if "resource_response" in message:
         for _ in range(int(num)):
             try:
-                b64list.append(getPin(message["resource_response"]["data"]["results"][randrange(0,99)]["images"]["orig"]["url"]))
-            except KeyError:
+                b64list.append(getPin(message["resource_response"]["data"]["results"][randrange(0,len(message["resource_response"]["data"]["results"])-1)]["images"]["orig"]["url"]))
+            except:
                 return json.dumps({"error": "关键词{}不存在！".format(name)})
     return json.dumps(b64list)
+
+def getWeibo(link):
+    if "weibo.com" in link:
+        link = re.sub(r"(www\.)?weibo\.com", "m.weibo.cn", link)
+    r = requests.get(link)
+    if 'Location' in r.headers:
+        r = requests.get(r.headers['Location'])
+    ret = {}
+    try:
+        message = json.loads(re.search(r"\$render_data.*(\[((.|\n)*)}\])", r.content.decode('utf-8')).group().strip("$render_data = "))
+        ret["author"] = message[0]["status"]["user"]["screen_name"]
+        ret["content"] = re.sub(r'<br \/>','\n',message[0]["status"]["text"])
+        ret["content"] = re.sub(r'<.*?>','',ret["content"])
+        if "pics" in message[0]["status"]:
+            ret["b64"] = []
+            for p in message[0]["status"]["pics"]:
+                ret["b64"].append(getPin(p["large"]["url"]))
+
+        if "page_info" in message[0]["status"]:
+            if "urls" in message[0]["status"]["page_info"]:
+                ret["video"] = list(message[0]["status"]["page_info"]["urls"].values())[0]
+    except:
+        return json.dumps({"error": "微博链接不合法"})
+    return json.dumps(ret)
+
+
 
 class Handler(BaseHTTPRequestHandler) :
         # A new Handler is created for every incommming request tho do_XYZ
@@ -152,6 +178,15 @@ class Handler(BaseHTTPRequestHandler) :
                 if len(query) == 0:
                     self.wfile.write(json.dumps({"error": "参数错误"}).encode('utf-8'))
                 message = SearchPainter(query["id"][0])
+                self._set_headers(len(message))
+                self.wfile.write(message.encode('utf-8'))
+            if "repost" in self.path:
+                query = parse.parse_qs(parse.urlparse(parse.unquote(self.path)).query)
+                if len(query) == 0:
+                    self.wfile.write(json.dumps({"error": "参数错误"}).encode('utf-8'))
+                if "weibo" not in query["link"][0]:
+                    self.wfile.write(json.dumps({"error": "参数错误"}).encode('utf-8'))
+                message = getWeibo(query["link"][0])
                 self._set_headers(len(message))
                 self.wfile.write(message.encode('utf-8'))
 
