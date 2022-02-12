@@ -228,7 +228,7 @@ async def matchPainter(websocket, sentence, e):
 async def matchFreeLink(websocket, sentence, e):
     matched, _ = rule.smatch(sentence, ['获取', '订阅'])
     if matched:
-        await sendMessage(websocket, "https://network.tw/trojan.yml")
+        await sendMessage(websocket, "")
         e.set()
         return True
     return False
