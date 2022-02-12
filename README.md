@@ -17,3 +17,5 @@ wget "https://www.space.ntu.edu.tw/webrelay/directdownload/ijGa2fGe7MbFvals/?dis
 # 基于Word2Vec匹配原理及相关算法
 
 ![Word2vec](https://github.com/MeteorsLiu/PyBot/raw/main/pics/MommyTalk1644679385634.jpg)
+
+f(s) 既最终句子与关键词的分数，建议阈值 >= 0.7
