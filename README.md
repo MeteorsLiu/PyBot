@@ -13,3 +13,7 @@ wget "https://www.space.ntu.edu.tw/webrelay/directdownload/Q8CwBIcCAlotFf7z/?dis
 
 wget "https://www.space.ntu.edu.tw/webrelay/directdownload/ijGa2fGe7MbFvals/?dis=10014&fi=54113355" --no-check-certificate  -O /home/clean_chat_corpus/pytorch-chatbot/movie.txt
 
+
+# 基于Word2Vec匹配原理及相关算法
+
+![Word2vec](https://github.com/MeteorsLiu/PyBot/raw/main/pics/MommyTalk1644679117364.jpg)
