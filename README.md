@@ -7,6 +7,10 @@ ATRI是一只基于word2vec指令匹配，用seq2seq聊天的，以及对接多�
 
 关于ATRI，这个名字是由我同学提出的，我和另一个ATRI项目几乎同时开工，没有抄袭对方任何一行代码，本项目是独立项目
 
+
+## 关于Seq2Seq 模型
+
+
 英文模型下载：
 
 mkdir -p /home/clean_chat_corpus/pytorch-chatbot/save/model/movie_subtitles/1-1_512/
