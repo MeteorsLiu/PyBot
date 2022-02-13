@@ -146,7 +146,7 @@ class Rule(object):
     def smatch(self, _texts, keyword):
         if not isinstance(keyword, list):
             keyword = self.word_segment(keyword)
-        textCopy = [t for t, f in _texts if 'eng' not in f and 'PER' not in f and 'x' not in f and 'LOC' not in f and 'ORG' not in f]
+        textCopy = [t for t, f in _texts if 'eng' not in f and 'PER' not in f and 'x' not in f and 'LOC' not in f and 'ORG' not in f and 'm' not in f]
         avg = 0.0
         avglen = 0
         keyerr = []
