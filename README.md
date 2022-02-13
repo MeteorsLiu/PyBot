@@ -3,6 +3,8 @@
 
 ATRI是一只基于word2vec指令匹配，用seq2seq聊天的，以及对接多方NLP平台智能ai聊天机器人
 
+本项目和 [ATRI](https://github.com/Kyomotoi/ATRI) 无关
+
 英文模型下载：
 
 mkdir -p /home/clean_chat_corpus/pytorch-chatbot/save/model/movie_subtitles/1-1_512/
