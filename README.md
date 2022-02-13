@@ -3,7 +3,9 @@
 
 ATRI是一只基于word2vec指令匹配，用seq2seq聊天的，以及对接多方NLP平台智能ai聊天机器人
 
-本项目和 [ATRI](https://github.com/Kyomotoi/ATRI) 无关
+本项目和 [ATRI](https://github.com/Kyomotoi/ATRI) 无关， 本项目更多的仅为测试，尝试，学习用途，代码写的非常乱，并不是一个可以直接拿来用的项目
+
+关于ATRI，这个名字是由我同学提出的，我和另一个ATRI项目几乎同时开工，没有抄袭对方任何一行代码，本项目是独立项目
 
 英文模型下载：
 
