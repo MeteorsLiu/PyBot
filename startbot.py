@@ -25,6 +25,7 @@ from collections import Counter
 from match import Rule
 
 
+
 def parseFilename(filename, test=False):
     filename = filename.split('/')
     dataType = filename[-1][:-4] # remove '.tar'
@@ -87,39 +88,72 @@ def getTencent(sentence):
     return re.sub('(腾讯)?小龙女', 'Atri', resp.Reply)
 
 class Robot(object):
-    def __init__(self, ws, loop, gid="649451770"):
+    def __init__(self, ws, loop, gid=None, uid=None):
         self.websocket = ws
         self.loop = loop
         self.gid  = gid
+        self.uid  = uid
     async def sendImage(self, b64):
-        await self.websocket.send(
-            json.dumps(
-            {
-                "action": "send_group_msg", 
-                "params": {
-                    "group_id": self.gid, 
-                    "message": "[CQ:image,file=base64://{}]".format(b64)
-                }
-            }
-        ))
-    async def sendMessage(self, m):
-        await self.websocket.send(
-            json.dumps(
-            {
-                "action": "send_group_msg", 
-                "params": {
-                    "group_id": self.gid, 
-                    "message": m       
-                }
-            }
-        ))
-    async def sendVideo(self, l):
-        await self.websocket.send(
+        if self.uid:
+            await self.websocket.send(
                 json.dumps(
-                {"action": "send_group_msg", 
-                "params": {"group_id": self.gid, 
-                "message": "[CQ:video,file={}]".format(l)
-        }}))
+                {
+                    "action": "send_msg", 
+                    "params": {
+                        "user_id": self.uid,
+                        "message": "[CQ:image,file=base64://{}]".format(b64)
+                    }
+                }
+            ))
+        else:
+            await self.websocket.send(
+                json.dumps(
+                {
+                    "action": "send_group_msg", 
+                    "params": {
+                        "group_id": self.gid, 
+                        "message": "[CQ:image,file=base64://{}]".format(b64)
+                    }
+                }
+            ))
+    async def sendMessage(self, m):
+        if self.uid:
+            await self.websocket.send(
+                json.dumps(
+                {
+                    "action": "send_msg", 
+                    "params": {
+                        "user_id": self.uid,
+                        "message": m       
+                    }
+                }
+            ))
+        else:
+            await self.websocket.send(
+                json.dumps(
+                {
+                    "action": "send_group_msg", 
+                    "params": {
+                        "group_id": self.gid, 
+                        "message": m       
+                    }
+                }
+            ))
+    async def sendVideo(self, l):
+        if self.uid:
+            await self.websocket.send(
+                    json.dumps(
+                    {"action": "send_msg", 
+                    "params": {"user_id": self.uid, 
+                    "message": "[CQ:video,file={}]".format(l)
+            }}))
+        else:
+            await self.websocket.send(
+                    json.dumps(
+                    {"action": "send_group_msg", 
+                    "params": {"group_id": self.gid, 
+                    "message": "[CQ:video,file={}]".format(l)
+            }}))
     async def sendRandomPic(self, times):
         for _ in range(times):
             #print(times)
@@ -136,7 +170,7 @@ class Robot(object):
         try:
             r = requests.get("http://172.30.56.22:6700/getname?name={}&num={}".format(name, times))
             message = r.json()
-        except ConnectionError:
+        except:
             await self.sendMessage("关键词{}无法查找".format(name))
             return
         #print(message)
@@ -154,7 +188,7 @@ class Robot(object):
         try:
             r = requests.get("http://172.30.56.22:6700/getpin?name={}&num={}".format(word, num))
             message = r.json()
-        except ConnectionError:
+        except:
             await self.sendMessage("关键词{}无法查找".format(word))
             return
         if "error" in message:
@@ -168,7 +202,7 @@ class Robot(object):
             try:
                 r = requests.get("http://172.30.56.22:6700/getbyid?id={}".format(id))
                 message = r.json()
-            except ConnectionError:
+            except:
                 await self.sendMessage("画师id{}无法查找".format(id))
                 continue
             if "error" in message:
@@ -177,28 +211,51 @@ class Robot(object):
             await self.sendImage(message["b64"])
             
     async def getWeibo(self, l):
-        r = requests.get("http://172.30.56.22:6700/repost?link={}".format(l))
-        message = r.json()
-        if "error" in message:
-            await self.sendMessage(message["error"])
-            return
-        await self.sendMessage("作者："+message["author"])
-        if "content" in message:
-            await self.sendMessage("内容："+message["content"])
-        if "b64" in message:
-            for m in message["b64"]:
-                await self.sendImage(m)
-        if "video" in message:
-            await self.sendVideo(message["video"])
+        try:
+            r = requests.get("http://172.30.56.22:6700/repost?link={}".format(l))
+            message = r.json()
+            if "error" in message:
+                await self.sendMessage(message["error"])
+                return
+            await self.sendMessage("作者："+message["author"])
+            if "content" in message:
+                await self.sendMessage("内容："+message["content"])
+            if "b64" in message:
+                for m in message["b64"]:
+                    await self.sendImage(m)
+            if "video" in message:
+                await self.sendVideo(message["video"])
+        except:
+            await self.sendMessage("Atri拒绝了该请求")
+
+    async def getTelegram(self, l):
+        try:
+            r = requests.get("http://172.30.56.22:6700/tg?link={}".format(l))
+            message = r.json()
+            if "error" in message:
+                await self.sendMessage(message["error"])
+                return
+            await self.sendMessage("作者："+message["author"])
+            if "content" in message:
+                await self.sendMessage("内容：\n"+message["content"])
+            if "b64" in message:
+                for m in message["b64"]:
+                    await self.sendImage(m)
+            if "video" in message:
+                await self.sendVideo(message["video"])
+            if "link" in message:
+                await self.sendMessage("相关链接：\n"+'\n'.join(message["link"]))
+        except:
+            await self.sendMessage("Atri拒绝了该请求")
 
     async def getBaidu(self, s):
-        ret = await self.loop.run_in_executor(None, rule.word_segment_text_bank, s)
-        counter = sum(Counter([f for _, f in ret if 'm' in f or 'q' in f or 'x' in f or 'PER' in f or 'n' in f]).values())
+        ret = await self.loop.run_in_executor(None , rule.word_segment_text_bank, s)
+        counter = sum(Counter([f for _, f in ret if 'm' in f or 'q' in f]).values())
         return (ret, counter)
 
     async def getNonBaidu(self, s):
-        ret = await self.loop.run_in_executor(None,rule.word_segment_text_bank_no_paddle, s)
-        counter = sum(Counter([f for _, f in ret if 'm' in f or 'q' in f or 'x' in f or 'PER' in f or 'n' in f]).values())
+        ret = await self.loop.run_in_executor(None ,rule.word_segment_text_bank_no_paddle, s)
+        counter = sum(Counter([f for _, f in ret if 'm' in f or 'q' in f]).values())
         return (ret, counter)
 
     async def getF(self, s):
@@ -216,33 +273,38 @@ class Robot(object):
 
     async def matchAction(self, sentence, e):
         try:
-            matched, texts = rule.smatch(sentence, ['获取', '吸吸', '查看', '照片', '图片', '图'])    
+            matched, texts = rule.smatch(sentence, ['获取','查看', '照片', '图片', '图'])    
             drawMatched, weebdict, andict = rule.match(texts, [('搜索', 'v'), ('动画', 'n'), ('图片', 'n'), ('兽迷', 'n')], '动画')
         except:
+            print("Match Action Fail!")
             return False
-
-        flag = False
-        if len(weebdict) > 0 and drawMatched and matched:
-            for w in weebdict:
-                await self.sendMessage("搜索{}{}张照片".format(w,weebdict[w]))
-                await self.searchPicAndSend(w, weebdict[w])
-            flag = True
-        if len(andict) > 0 and matched:
-            for a in andict:
-                if a != '_pic':
-                    await self.sendMessage("搜索{}{}张照片".format(a, andict[a]))
-                    await self.searchPinterest(a, andict[a])
-            flag = True
-        if "_pic" in andict and matched:
-            await self.sendRandomPic(andict["_pic"])
-            flag = True
-        if flag:
-            e.set()
+        try:
+            flag = False
+            if len(weebdict) > 0 and drawMatched and matched:
+                for w in weebdict:
+                    await self.sendMessage("搜索{}{}张照片".format(w,weebdict[w]))
+                    await self.searchPicAndSend(w, weebdict[w])
+                flag = True
+            if len(andict) > 0 and matched:
+                for a in andict:
+                    if a != '_pic':
+                        await self.sendMessage("搜索{}{}张照片".format(a, andict[a]))
+                        await self.searchPinterest(a, andict[a])
+                flag = True
+            if "_pic" in andict and matched:
+                await self.sendRandomPic(andict["_pic"])
+                flag = True
+            if flag:
+                e.set()
+        except Exception as e:
+            print(e)
         return flag
     
 
     async def matchName(self, sentence, e):
-        matched, _ = rule.smatch(sentence, ['获取', '名字', '个性'])
+        if '叫' not in sentence or len(sentence) > 7:
+            return
+        matched, _ = rule.smatch(sentence, ['获取','名字'])
         if matched:
             await self.sendMessage("我叫Atri噢")
             e.set()
@@ -261,10 +323,46 @@ class Robot(object):
         if self.gid != "649451770":
             return
         matched, _ = rule.smatch(sentence, ['获取', '订阅'])
+        print("Target match Free link Done")
         if matched:
-            await self.sendMessage("")
+            await self.sendMessage("https://network.tw/trojan.yml")
             e.set()
             return True
+        return False
+
+    async def matchUsage(self, sentence, e):
+        if len(sentence) > 10:
+            return
+        matched, _ = rule.smatch(sentence, ['获取', '什么', '功能'])
+        if matched:
+            await self.sendMessage("""你可以尝试对我说: \n
+            atri，来张图，或者明确点\n
+            来张雷姆的图，如果你需要多来几张，也可以说\n
+            来五张图，来五张雷姆，或者搜索五张雷姆，这样子都是可以的喔\n
+            咱也支持搜索画师id哒！\n
+            你可以对我说，atri，搜索画师2131231(这串数字替换成你想要的画师id即可)\n
+            你以为我只会干这么点事？\n
+            咱还可以帮你转发电报和微博呢，你只需要对我说：\n
+            转发电报(替换成你的电报链接)\n
+            转发微博(你的微博链接)\n
+            另外捏，咱是开源的，来项目主页给颗star吧\n
+            github.com/MeteorsLiu/PyBot\n
+            爱你喔""")
+            e.set()
+            return True
+        return False
+
+    async def matchParent(self, sentence, e):
+        try:
+            if len(sentence) > 7:
+                return
+            matched, _ = rule.smatch(sentence, ['父母'])
+            if matched:
+                await self.sendMessage("我叫Atri噢")
+                e.set()
+                return True
+        except:
+            raise
         return False
 
     async def sendPic(self, path):
@@ -280,6 +378,86 @@ class Robot(object):
             print("File not found")
         except websockets.ConnectionClosed:
             print("Connection closed")
+async def worker(_t, robot: Robot, isPrivate=False):
+    #常规指令匹配
+    if "!随机" in _t:
+        await robot.sendRandomPic(1)
+        return
+    if "获取atri功能" in _t:
+        await robot.sendMessage(
+            """你可以尝试对我说: \n
+            atri，来张图，或者明确点\n
+            来张雷姆的图，如果你需要多来几张，也可以说\n
+            来五张图，来五张雷姆，或者搜索五张雷姆，这样子都是可以的喔\n
+            咱也支持搜索画师id哒！\n
+            你可以对我说，atri，搜索画师2131231(这串数字替换成你想要的画师id即可)\n
+            你以为我只会干这么点事？\n
+            咱还可以帮你转发电报和微博呢，你只需要对我说：\n
+            转发电报(替换成你的电报链接)\n
+            转发微博(你的微博链接)\n
+            另外捏，咱是开源的，来项目主页给颗star吧\n
+            github.com/MeteorsLiu/PyBot\n
+            爱你喔
+            """
+        )
+        return
+    if "转发微博" in _t:
+        link = re.sub("转发微博(。|，|？|！|\?|\!|\.|\,|：|:)?", '', _t)
+        await robot.getWeibo(link)
+        return
+
+    if "转发电报" in _t:
+        link = re.sub("转发电报(。|，|？|！|\?|\!|\.|\,|：|:)?", '', _t)
+        await robot.getTelegram(link)
+        return
+
+    #动态匹配
+    realmessage = None
+    if "atri" in _t:
+        realmessage = re.sub("^atri(。|，|？|！|\?|\!|\.|\,)?", '', _t).strip()
+    if "CQ:at" in _t and "2301059398" in _t:
+        realmessage = re.sub(r'\[.*?\]', '', _t).strip()
+    if isPrivate:
+        if not realmessage:
+            realmessage = _t
+
+    if realmessage:
+        if "发张图" in realmessage or ("发" in realmessage and "图" in realmessage):
+            await robot.sendRandomPic(1)
+            return
+
+        isChinese = False
+        if is_all_chinese(realmessage):
+            isChinese = True
+            realmessage = normalizeChinese(realmessage)
+            wordseg = await robot.getF(realmessage)
+            event = asyncio.Event()
+            
+            await robot.matchAction(wordseg, event)
+            await robot.matchPainter(wordseg, event)
+            await robot.matchUsage(wordseg, event)
+            await robot.matchFreeLink(wordseg, event)
+            
+            if event.is_set(): 
+                event.clear()
+                return
+        else:
+            realmessage = normalizeString(realmessage)
+
+        try:
+            if not isChinese:
+                content = en(realmessage, "en")
+                content = ' '.join(content)
+            else:
+                content = getTencent(realmessage)
+        except:
+            content = getTencent(realmessage)
+            #randint = randrange(0,50)
+            #if randint % 2 == 0:
+            #    content = getRobot(realmessage)
+            #else:
+        await robot.sendMessage(content)
+        
 
 async def echo(websocket, path):
     robot = Robot(websocket, loop)
@@ -287,70 +465,22 @@ async def echo(websocket, path):
         message = await websocket.recv()
         message = json.loads(message)
         if "sender" in message and "message" in message:
-            robot.gid = message["group_id"]
+            isPrivate = False
+            if "user_id" in message and message["message_type"] == 'private' and not "group_id" in message:
+                isPrivate = True
+                robot.uid = message["user_id"]
+            elif "group_id" in message and not isPrivate:
+                robot.gid = message["group_id"]
+            else:
+                continue
             _t = message["message"].strip()
-
-            #常规指令匹配
-            if "!随机" in message["message"]:
-                await robot.sendRandomPic(1)
-                continue
-
-            if "转发微博" in message["message"]:
-                link = re.sub("转发微博(。|，|？|！|\?|\!|\.|\,|：|:)?", '', _t)
-                await robot.getWeibo(link)
-                continue
-
-            #动态匹配
-            realmessage = None
-            if "atri" in _t:
-                realmessage = re.sub("^atri(。|，|？|！|\?|\!|\.|\,)?", '', _t)
-
-            if "CQ:at" in message["message"] and "2301059398" in message["message"]:
-                realmessage = re.sub(r'\[.*?\]', '', message["message"]).strip()
-
-            if realmessage:
-                if "发张图" in realmessage or ("发" in realmessage and "图" in realmessage):
-                    await robot.sendRandomPic(websocket, 1)
-                    continue
-
-                isChinese = False
-                if is_all_chinese(realmessage):
-                    isChinese = True
-                    realmessage = normalizeChinese(realmessage)
-                    wordseg = await robot.getF(realmessage)
-                    event = asyncio.Event()
-                    await asyncio.gather(
-                        robot.matchAction(wordseg, event),
-                        robot.matchPainter(wordseg, event),
-                        robot.matchFreeLink(wordseg, event)
-                    )
-                    if event.is_set():
-                        event.clear()
-                        continue
-                else:
-                    realmessage = normalizeString(realmessage)
-
-                try:
-                    if not isChinese:
-                        content = en(realmessage, "en")
-                        content = ' '.join(content)
-                    else:
-                        content = getTencent(realmessage)
-                except:
-                    content = getTencent(realmessage)
-                    #randint = randrange(0,50)
-                    #if randint % 2 == 0:
-                    #    content = getRobot(realmessage)
-                    #else:
-                await robot.sendMessage(content)
-
-
-
+            await worker(_t, robot, isPrivate)
+            if isPrivate:
+                robot.uid = None
 
 async def main():
     async with websockets.serve(echo, "127.0.0.1", 6750):
         await asyncio.Future()  # run forever
-
 
 if __name__ == "__main__":
     #n_layers, hidden_size, reverse = parseFilename("/home/clean_chat_corpus/pytorch-chatbot/save/model/somefile/1-1_512/10000_backup_bidir_model.tar", False)
