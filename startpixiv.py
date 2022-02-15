@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
+
 import requests
 import json
 import base64
@@ -199,6 +200,45 @@ def getWeibo(link):
     return json.dumps(ret)
 
 
+def getTelegram(link):
+    if "?" in link:
+        link = re.sub('\?.*', '?embed=1', link)
+    else:
+        link += "?embed=1"
+    ret = {}
+    try:
+        r = requests.get(link)
+        webpage = r.content.decode('utf-8')
+        matchString = re.search('<a .*(tgme_widget_message_author_name|tgme_widget_message_owner_name).*\<\/span>', webpage).group()
+        ret["author"] = re.sub(r'<\/span>','\n',matchString)
+        ret["author"] = re.sub(r'<.*?>','',ret["author"])
+
+        matchContent = re.search('<div.*tgme_widget_message_text.*<\/div>', webpage)
+        if matchContent:
+            matchContent = matchContent.group()
+            #print(matchContent)
+            matchLink = re.findall(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""",matchContent)
+            if matchLink:
+                ret["link"] = []
+                for ml in matchLink:
+                    print(ml[1])
+                    ret["link"].append(ml[1])
+                
+            ret["content"] = re.sub(r'<br\/>','\n',matchContent)
+            ret["content"] = re.sub(r'<.*?>','',ret["content"])
+        #print(ret)
+        matchImage = re.findall(r"image:url\(.*\'", webpage)
+        if matchImage:
+            ret["b64"] = []
+            for m in matchImage:
+                plink = re.sub(r"image:url\(|\'", '', m)
+                #print(plink)
+                ret["b64"].append(getPin(plink))
+        return json.dumps(ret)
+    except:
+        raise
+        return json.dumps({"error": "TG链接不合法"})
+   
 
 class Handler(BaseHTTPRequestHandler) :
         # A new Handler is created for every incommming request tho do_XYZ
@@ -217,32 +257,46 @@ class Handler(BaseHTTPRequestHandler) :
                 query = parse.parse_qs(parse.urlparse(parse.unquote(self.path)).query)
                 if len(query) == 0:
                     self.wfile.write(json.dumps({"error": "参数错误"}).encode('utf-8'))
-                message = getName(query["name"][0], query["num"][0])
-                self._set_headers(len(message))
-                self.wfile.write(message.encode('utf-8'))
+                else:
+                    message = getName(query["name"][0], query["num"][0])
+                    self._set_headers(len(message))
+                    self.wfile.write(message.encode('utf-8'))
             if "getpin" in self.path:
                 query = parse.parse_qs(parse.urlparse(parse.unquote(self.path)).query)
                 if len(query) == 0:
                     self.wfile.write(json.dumps({"error": "参数错误"}).encode('utf-8'))
-                message = getPinterest(query["name"][0], query["num"][0])
-                self._set_headers(len(message))
-                self.wfile.write(message.encode('utf-8'))
+                else:
+                    message = getPinterest(query["name"][0], query["num"][0])
+                    self._set_headers(len(message))
+                    self.wfile.write(message.encode('utf-8'))
             if "getbyid" in self.path:
                 query = parse.parse_qs(parse.urlparse(parse.unquote(self.path)).query)
                 if len(query) == 0:
                     self.wfile.write(json.dumps({"error": "参数错误"}).encode('utf-8'))
-                message = SearchPainter(query["id"][0])
-                self._set_headers(len(message))
-                self.wfile.write(message.encode('utf-8'))
+                else:
+                    message = SearchPainter(query["id"][0])
+                    self._set_headers(len(message))
+                    self.wfile.write(message.encode('utf-8'))
             if "repost" in self.path:
                 query = parse.parse_qs(parse.urlparse(parse.unquote(self.path)).query)
                 if len(query) == 0:
+                    self.wfile.write(json.dumps({"error": "参数错误"}).encode('utf-8'))     
+                elif "weibo" not in query["link"][0]:
                     self.wfile.write(json.dumps({"error": "参数错误"}).encode('utf-8'))
-                if "weibo" not in query["link"][0]:
+                else:  
+                    message = getWeibo(query["link"][0])
+                    self._set_headers(len(message))
+                    self.wfile.write(message.encode('utf-8'))
+            if "tg" in self.path:
+                query = parse.parse_qs(parse.urlparse(parse.unquote(self.path)).query)
+                if len(query) == 0:
                     self.wfile.write(json.dumps({"error": "参数错误"}).encode('utf-8'))
-                message = getWeibo(query["link"][0])
-                self._set_headers(len(message))
-                self.wfile.write(message.encode('utf-8'))
+                elif "t.me" not in query["link"][0]:
+                    self.wfile.write(json.dumps({"error": "参数错误"}).encode('utf-8'))
+                else:  
+                    message = getTelegram(query["link"][0])
+                    self._set_headers(len(message))
+                    self.wfile.write(message.encode('utf-8'))
 
 s = HTTPServer( ('172.30.56.22', 6700), Handler )
 s.serve_forever()
