@@ -57,7 +57,7 @@ class Rule(object):
         try:                
             # jieba custom setting.
             self.load_model(model_path)
-            
+            self.vocab = self.model.wv.key_to_index
         except FileNotFoundError as e:
             print("[Console] 請確定詞向量模型有正確配置")
             print(e)
@@ -131,7 +131,6 @@ class Rule(object):
                 keyword.append((word,flag))
         return keyword
     def get_sim(self, avg, sentence, keyword):
-  
         sim = math.exp(self.model.wv.n_similarity(sentence, keyword))
         print('句子相似值: {} 综合关键词命中值: {}'.format(sim, avg))
         dis = self.model.wv.wmdistance(sentence, keyword)
@@ -140,13 +139,13 @@ class Rule(object):
         dis = 1.0 / math.log(dis)
         print('WMD算法估值: {}'.format(dis))
         if dis <= 0:
-            dis = 10
+            dis = 5
         return math.log10(((sim+avg)/2)*dis)
     #意图匹配
     def smatch(self, _texts, keyword):
         if not isinstance(keyword, list):
             keyword = self.word_segment(keyword)
-        textCopy = [t for t, f in _texts if 'eng' not in f and 'PER' not in f and 'x' not in f and 'LOC' not in f and 'ORG' not in f and 'm' not in f]
+        textCopy = [t for t, _ in _texts if t in self.vocab]
         avg = 0.0
         avglen = 0
         keyerr = []
@@ -297,5 +296,3 @@ class Rule(object):
             if avg/float(avglen) >= 0.3:
                 return True, ndict, andict
         return False, ndict, andict
-
-
