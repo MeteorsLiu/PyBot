@@ -131,8 +131,13 @@ class Rule(object):
                 keyword.append((word,flag))
         return keyword
     def get_sim(self, avg, sentence, keyword):
-        sim = math.exp(self.model.wv.n_similarity(sentence, keyword))
-        print('句子相似值: {} 综合关键词命中值: {}'.format(sim, avg))
+        print(sentence)
+        simo = self.model.wv.n_similarity(sentence, keyword)
+        if simo >= 0.3 :
+            sim = math.exp((simo+avg)/2)
+        else:
+            return 0
+        print('句子相似度：{}, 句子相似值: {} 综合关键词命中值: {}'.format(simo, sim, avg))
         dis = self.model.wv.wmdistance(sentence, keyword)
         if dis == 1:
             dis = 0.1
@@ -140,7 +145,7 @@ class Rule(object):
         print('WMD算法估值: {}'.format(dis))
         if dis <= 0:
             dis = 5
-        return math.log10(((sim+avg)/2)*dis)
+        return math.log10(sim*dis)
     #意图匹配
     def smatch(self, _texts, keyword):
         if not isinstance(keyword, list):

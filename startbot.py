@@ -23,8 +23,7 @@ from tencentcloud.nlp.v20190408 import models as m
 import re
 from collections import Counter
 from match import Rule
-
-
+import jieba
 
 def parseFilename(filename, test=False):
     filename = filename.split('/')
@@ -296,8 +295,8 @@ class Robot(object):
                 flag = True
             if flag:
                 e.set()
-        except Exception as e:
-            print(e)
+        except Exception as ex:
+            print(ex)
         return flag
     
 
@@ -320,33 +319,36 @@ class Robot(object):
         return False
 
     async def matchFreeLink(self, sentence, e):
-        if self.gid != "649451770":
-            return
-        matched, _ = rule.smatch(sentence, ['获取', '订阅'])
-        print("Target match Free link Done")
-        if matched:
-            await self.sendMessage("https://network.tw/trojan.yml")
-            e.set()
-            return True
+        try:
+            if self.gid != "649451770":
+                return
+            matched, _ = rule.smatch(sentence, ['获取', '订阅'])
+            print("Target match Free link Done")
+            if matched:
+                await self.sendMessage("Clash输入\n999.tf\n就好咯")
+                e.set()
+                return True
+        except Exception as ex:
+            print(ex)
         return False
 
     async def matchUsage(self, sentence, e):
         if len(sentence) > 10:
             return
-        matched, _ = rule.smatch(sentence, ['获取', '什么', '功能'])
+        matched, _ = rule.smatch(sentence, ['获取',  '功能'])
         if matched:
-            await self.sendMessage("""你可以尝试对我说: \n
-            atri，来张图，或者明确点\n
-            来张雷姆的图，如果你需要多来几张，也可以说\n
-            来五张图，来五张雷姆，或者搜索五张雷姆，这样子都是可以的喔\n
-            咱也支持搜索画师id哒！\n
-            你可以对我说，atri，搜索画师2131231(这串数字替换成你想要的画师id即可)\n
-            你以为我只会干这么点事？\n
-            咱还可以帮你转发电报和微博呢，你只需要对我说：\n
-            转发电报(替换成你的电报链接)\n
-            转发微博(你的微博链接)\n
-            另外捏，咱是开源的，来项目主页给颗star吧\n
-            github.com/MeteorsLiu/PyBot\n
+            await self.sendMessage("""你可以尝试对我说:
+            atri，来张图，或者明确点
+            来张雷姆的图，如果你需要多来几张，也可以说
+            来五张图，来五张雷姆，或者搜索五张雷姆，这样子都是可以的喔
+            咱也支持搜索画师id哒！
+            你可以对我说，atri，搜索画师2131231(这串数字替换成你想要的画师id即可)
+            你以为我只会干这么点事？
+            咱还可以帮你转发电报和微博呢，你只需要对我说：
+            转发电报(替换成你的电报链接)
+            转发微博(你的微博链接)
+            另外捏，咱是开源的，来项目主页给颗star吧
+            github.com/MeteorsLiu/PyBot
             爱你喔""")
             e.set()
             return True
@@ -383,20 +385,20 @@ async def worker(_t, robot: Robot, isPrivate=False):
     if "!随机" in _t:
         await robot.sendRandomPic(1)
         return
-    if "获取atri功能" in _t:
+    if "获取功能" in _t:
         await robot.sendMessage(
-            """你可以尝试对我说: \n
-            atri，来张图，或者明确点\n
-            来张雷姆的图，如果你需要多来几张，也可以说\n
-            来五张图，来五张雷姆，或者搜索五张雷姆，这样子都是可以的喔\n
-            咱也支持搜索画师id哒！\n
-            你可以对我说，atri，搜索画师2131231(这串数字替换成你想要的画师id即可)\n
-            你以为我只会干这么点事？\n
-            咱还可以帮你转发电报和微博呢，你只需要对我说：\n
-            转发电报(替换成你的电报链接)\n
-            转发微博(你的微博链接)\n
-            另外捏，咱是开源的，来项目主页给颗star吧\n
-            github.com/MeteorsLiu/PyBot\n
+            """你可以尝试对我说: 
+            atri，来张图，或者明确点
+            来张雷姆的图，如果你需要多来几张，也可以说
+            来五张图，来五张雷姆，或者搜索五张雷姆，这样子都是可以的喔
+            咱也支持搜索画师id哒！
+            你可以对我说，atri，搜索画师2131231(这串数字替换成你想要的画师id即可)
+            你以为我只会干这么点事？
+            咱还可以帮你转发电报和微博呢，你只需要对我说：
+            转发电报(替换成你的电报链接)
+            转发微博(你的微博链接)
+            另外捏，咱是开源的，来项目主页给颗star吧
+            github.com/MeteorsLiu/PyBot
             爱你喔
             """
         )
@@ -413,8 +415,8 @@ async def worker(_t, robot: Robot, isPrivate=False):
 
     #动态匹配
     realmessage = None
-    if "atri" in _t:
-        realmessage = re.sub("^atri(。|，|？|！|\?|\!|\.|\,)?", '', _t).strip()
+    if "atri" in _t or "亚托莉" in _t:
+        realmessage = re.sub("^(atri|亚托莉)(。|，|？|！|\?|\!|\.|\,)?", '', _t).strip()
     if "CQ:at" in _t and "2301059398" in _t:
         realmessage = re.sub(r'\[.*?\]', '', _t).strip()
     if isPrivate:
@@ -435,7 +437,6 @@ async def worker(_t, robot: Robot, isPrivate=False):
             
             await robot.matchAction(wordseg, event)
             await robot.matchPainter(wordseg, event)
-            await robot.matchUsage(wordseg, event)
             await robot.matchFreeLink(wordseg, event)
             
             if event.is_set(): 
@@ -449,7 +450,8 @@ async def worker(_t, robot: Robot, isPrivate=False):
                 content = en(realmessage, "en")
                 content = ' '.join(content)
             else:
-                content = getTencent(realmessage)
+                content = zh(' '.join(jieba.lcut(realmessage)), "en")
+                content = ''.join(content)
         except:
             content = getTencent(realmessage)
             #randint = randrange(0,50)
@@ -481,6 +483,7 @@ async def echo(websocket, path):
 async def main():
     async with websockets.serve(echo, "127.0.0.1", 6750):
         await asyncio.Future()  # run forever
+
 
 if __name__ == "__main__":
     #n_layers, hidden_size, reverse = parseFilename("/home/clean_chat_corpus/pytorch-chatbot/save/model/somefile/1-1_512/10000_backup_bidir_model.tar", False)
