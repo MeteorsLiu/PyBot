@@ -4,7 +4,7 @@ import os
 import unicodedata
 
 from config import MAX_LENGTH, save_dir
-
+import jieba
 SOS_token = 0
 EOS_token = 1
 PAD_token = 2
@@ -50,17 +50,18 @@ def readVocs(corpus, corpus_name):
     print("Reading lines...")
 
     # combine every two lines into pairs and normalize
-    with open(corpus) as f:
-        content = f.readlines()
+    with open(corpus, encoding='utf-8') as f:
+        content = f.read().splitlines()
     # import gzip
     # content = gzip.open(corpus, 'rt')
-    lines = [x.strip() for x in content]
+    lines = [' '.join(jieba.lcut(x)) for x in content]
     it = iter(lines)
     # pairs = [[normalizeString(x), normalizeString(next(it))] for x in it]
     pairs = [[x, next(it)] for x in it]
 
     voc = Voc(corpus_name)
     return voc, pairs
+
 
 def filterPair(p):
     # input sequences need to preserve the last word for EOS_token
@@ -73,7 +74,7 @@ def filterPairs(pairs):
 def prepareData(corpus, corpus_name):
     voc, pairs = readVocs(corpus, corpus_name)
     print("Read {!s} sentence pairs".format(len(pairs)))
-    pairs = filterPairs(pairs)
+    #pairs = filterPairs(pairs)
     print("Trimmed to {!s} sentence pairs".format(len(pairs)))
     print("Counting words...")
     for pair in pairs:
@@ -93,7 +94,8 @@ def loadPrepareData(corpus):
         print("Start loading training data ...")
         voc = torch.load(os.path.join(save_dir, 'training_data', corpus_name, 'voc.tar'))
         pairs = torch.load(os.path.join(save_dir, 'training_data', corpus_name, 'pairs.tar'))
-    except FileNotFoundError:
+    except:
         print("Saved data not found, start preparing trianing data ...")
         voc, pairs = prepareData(corpus, corpus_name)
     return voc, pairs
+
