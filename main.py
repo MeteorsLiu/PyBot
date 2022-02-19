@@ -1,6 +1,6 @@
 import argparse
 from train import trainIters
-from evaluate import *
+from evaluate import runTest
 
 def parse():
     parser = argparse.ArgumentParser(description='Attention Seq2Seq Chatbot')
@@ -48,8 +48,7 @@ def run(args):
                     n_layers, hidden_size, print_every, save_every, dropout, loadFilename=args.load)
     elif args.test:
         n_layers, hidden_size, reverse = parseFilename(args.test, True)
-        m = Model(n_layers, hidden_size, args.test, args.corpus)
-        print(m("玩笑", 'zh'))
+        runTest(n_layers, hidden_size, reverse, args.test, beam_size, inp, args.corpus)
 
 
 if __name__ == '__main__':

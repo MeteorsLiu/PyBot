@@ -6,68 +6,71 @@ USE_CUDA = torch.cuda.is_available()
 device = torch.device("cuda" if USE_CUDA else "cpu")
 
 class EncoderRNN(nn.Module):
-    def __init__(self, hidden_size, embedding, n_layers=1, dropout=0):
+    def __init__(self, input_size, hidden_size, embedding, n_layers=1, dropout=0):
         super(EncoderRNN, self).__init__()
         self.n_layers = n_layers
         self.hidden_size = hidden_size
         self.embedding = embedding
 
-        # Initialize GRU; the input_size and hidden_size params are both set to 'hidden_size'
-        #   because our input size is a word embedding with number of features == hidden_size
         self.gru = nn.GRU(hidden_size, hidden_size, n_layers,
                           dropout=(0 if n_layers == 1 else dropout), bidirectional=True)
 
     def forward(self, input_seq, input_lengths, hidden=None):
-        # Convert word indexes to embeddings
         embedded = self.embedding(input_seq)
-        # Pack padded batch of sequences for RNN module
-        packed = nn.utils.rnn.pack_padded_sequence(embedded, input_lengths)
-        # Forward pass through GRU
-        outputs, hidden = self.gru(packed, hidden)
-        # Unpack padding
-        outputs, _ = nn.utils.rnn.pad_packed_sequence(outputs)
-        # Sum bidirectional GRU outputs
-        outputs = outputs[:, :, :self.hidden_size] + outputs[:, : ,self.hidden_size:]
-        # Return output and final hidden state
+        packed = torch.nn.utils.rnn.pack_padded_sequence(embedded, input_lengths)
+        outputs, hidden = self.gru(packed, hidden) # output: (seq_len, batch, hidden*n_dir)
+        outputs, _ = torch.nn.utils.rnn.pad_packed_sequence(outputs)
+        outputs = outputs[:, :, :self.hidden_size] + outputs[:, : ,self.hidden_size:] # Sum bidirectional outputs (1, batch, hidden)
         return outputs, hidden
+
 class Attn(nn.Module):
     def __init__(self, method, hidden_size):
         super(Attn, self).__init__()
+
         self.method = method
-        if self.method not in ['dot', 'general', 'concat']:
-            raise ValueError(self.method, "is not an appropriate attention method.")
         self.hidden_size = hidden_size
+
         if self.method == 'general':
             self.attn = nn.Linear(self.hidden_size, hidden_size)
+
         elif self.method == 'concat':
             self.attn = nn.Linear(self.hidden_size * 2, hidden_size)
-            self.v = nn.Parameter(torch.FloatTensor(hidden_size))
-
-    def dot_score(self, hidden, encoder_output):
-        return torch.sum(hidden * encoder_output, dim=2)
-
-    def general_score(self, hidden, encoder_output):
-        energy = self.attn(encoder_output)
-        return torch.sum(hidden * energy, dim=2)
-
-    def concat_score(self, hidden, encoder_output):
-        energy = self.attn(torch.cat((hidden.expand(encoder_output.size(0), -1, -1), encoder_output), 2)).tanh()
-        return torch.sum(self.v * energy, dim=2)
+            self.v = nn.Parameter(torch.FloatTensor(1, hidden_size))
 
     def forward(self, hidden, encoder_outputs):
-        # Calculate the attention weights (energies) based on the given method
-        if self.method == 'general':
-            attn_energies = self.general_score(hidden, encoder_outputs)
-        elif self.method == 'concat':
-            attn_energies = self.concat_score(hidden, encoder_outputs)
-        elif self.method == 'dot':
-            attn_energies = self.dot_score(hidden, encoder_outputs)
+        # hidden [1, 64, 512], encoder_outputs [14, 64, 512]
+        max_len = encoder_outputs.size(0)
+        batch_size = encoder_outputs.size(1)
 
-        # Transpose max_length and batch_size dimensions
-        attn_energies = attn_energies.t()
+        # Create variable to store attention energies
+        attn_energies = torch.zeros(batch_size, max_len) # B x S
+        attn_energies = attn_energies.to(device)
 
-        # Return the softmax normalized probability scores (with added dimension)
+        # For each batch of encoder outputs
+        for b in range(batch_size):
+            # Calculate energy for each encoder output
+            for i in range(max_len):
+                attn_energies[b, i] = self.score(hidden[:, b], encoder_outputs[i, b].unsqueeze(0))
+
+        # Normalize energies to weights in range 0 to 1, resize to 1 x B x S
         return F.softmax(attn_energies, dim=1).unsqueeze(1)
+
+    def score(self, hidden, encoder_output):
+        # hidden [1, 512], encoder_output [1, 512]
+        if self.method == 'dot':
+            energy = hidden.squeeze(0).dot(encoder_output.squeeze(0))
+            return energy
+
+        elif self.method == 'general':
+            energy = self.attn(encoder_output)
+            energy = hidden.squeeze(0).dot(energy.squeeze(0))
+            return energy
+
+        elif self.method == 'concat':
+            energy = self.attn(torch.cat((hidden, encoder_output), 1))
+            energy = self.v.squeeze(0).dot(energy.squeeze(0))
+            return energy
+
 class LuongAttnDecoderRNN(nn.Module):
     def __init__(self, attn_model, embedding, hidden_size, output_size, n_layers=1, dropout=0.1):
         super(LuongAttnDecoderRNN, self).__init__()
@@ -86,27 +89,37 @@ class LuongAttnDecoderRNN(nn.Module):
         self.concat = nn.Linear(hidden_size * 2, hidden_size)
         self.out = nn.Linear(hidden_size, output_size)
 
-        self.attn = Attn(attn_model, hidden_size)
+        # Choose attention model
+        if attn_model != 'none':
+            self.attn = Attn(attn_model, hidden_size)
 
-    def forward(self, input_step, last_hidden, encoder_outputs):
-        # Note: we run this one step (word) at a time
-        # Get embedding of current input word
-        embedded = self.embedding(input_step)
-        embedded = self.embedding_dropout(embedded)
-        # Forward through unidirectional GRU
+    def forward(self, input_seq, last_hidden, encoder_outputs):
+        # Note: we run this one step at a time
+
+        # Get the embedding of the current input word (last output word)
+        embedded = self.embedding(input_seq)
+        embedded = self.embedding_dropout(embedded) #[1, 64, 512]
+        if(embedded.size(0) != 1):
+            raise ValueError('Decoder input sequence length should be 1')
+
+        # Get current hidden state from input word and last hidden state
         rnn_output, hidden = self.gru(embedded, last_hidden)
-        # Calculate attention weights from the current GRU output
-        attn_weights = self.attn(rnn_output, encoder_outputs)
-        # Multiply attention weights to encoder outputs to get new "weighted sum" context vector
-        context = attn_weights.bmm(encoder_outputs.transpose(0, 1))
-        # Concatenate weighted context vector and GRU output using Luong eq. 5
-        rnn_output = rnn_output.squeeze(0)
-        context = context.squeeze(1)
-        concat_input = torch.cat((rnn_output, context), 1)
-        concat_output = torch.tanh(self.concat(concat_input))
-        # Predict next word using Luong eq. 6
-        output = self.out(concat_output)
-        output = F.softmax(output, dim=1)
-        # Return output and final hidden state
-        return output, hidden
 
+        # Calculate attention from current RNN state and all encoder outputs;
+        # apply to encoder outputs to get weighted average
+        attn_weights = self.attn(rnn_output, encoder_outputs) #[64, 1, 14]
+        # encoder_outputs [14, 64, 512]
+        context = attn_weights.bmm(encoder_outputs.transpose(0, 1)) #[64, 1, 512]
+
+        # Attentional vector using the RNN hidden state and context vector
+        # concatenated together (Luong eq. 5)
+        rnn_output = rnn_output.squeeze(0) #[64, 512]
+        context = context.squeeze(1) #[64, 512]
+        concat_input = torch.cat((rnn_output, context), 1) #[64, 1024]
+        concat_output = torch.tanh(self.concat(concat_input)) #[64, 512]
+
+        # Finally predict next token (Luong eq. 6, without softmax)
+        output = self.out(concat_output) #[64, output_size]
+
+        # Return final output, hidden state, and attention weights (for visualization)
+        return output, hidden, attn_weights

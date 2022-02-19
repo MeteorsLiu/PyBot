@@ -1,12 +1,9 @@
-from turtle import forward
 import torch
 import random
 from train import indexesFromSentence
 from load import SOS_token, EOS_token
 from load import MAX_LENGTH, loadPrepareData, Voc
 from model import *
-import torch.nn as nn
-
 
 USE_CUDA = torch.cuda.is_available()
 device = torch.device("cuda" if USE_CUDA else "cpu")
@@ -121,7 +118,6 @@ def evaluate(encoder, decoder, voc, sentence, beam_size, max_length=MAX_LENGTH):
         return beam_decode(decoder, decoder_hidden, encoder_outputs, voc, beam_size)
 
 
-
 def evaluateRandomly(encoder, decoder, voc, pairs, reverse, beam_size, n=10):
     for _ in range(n):
         pair = random.choice(pairs)
@@ -159,74 +155,27 @@ def evaluateInput(encoder, decoder, voc, beam_size):
             print("Incorrect spelling.")
 
 
+def runTest(n_layers, hidden_size, reverse, modelFile, beam_size, inp, corpus):
+    torch.set_grad_enabled(False)
 
+    voc, pairs = loadPrepareData(corpus)
+    embedding = nn.Embedding(voc.n_words, hidden_size)
+    encoder = EncoderRNN(voc.n_words, hidden_size, embedding, n_layers)
+    attn_model = 'dot'
+    decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.n_words, n_layers)
 
+    checkpoint = torch.load(modelFile)
+    encoder.load_state_dict(checkpoint['en'])
+    decoder.load_state_dict(checkpoint['de'])
 
-class Model(object):
-    def __init__(self, n_layers, hidden_size, modelFile, corpus):
-        voc, pairs = loadPrepareData(corpus)
-        embedding = nn.Embedding(voc.n_words, hidden_size)
-        encoder = EncoderRNN(hidden_size, embedding, n_layers, 0.1)
-        attn_model = 'dot'
-        decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.n_words, n_layers, 0.1)
+    # train mode set to false, effect only on dropout, batchNorm
+    encoder.train(False);
+    decoder.train(False);
 
-        checkpoint = torch.load(modelFile, map_location=torch.device('cpu'))
-        encoder.load_state_dict(checkpoint['en'])
-        decoder.load_state_dict(checkpoint['de'])
+    encoder = encoder.to(device)
+    decoder = decoder.to(device)
 
-        # train mode set to false, effect only on dropout, batchNorm
-        encoder.train(False);
-        decoder.train(False);
-
-        encoder = encoder.to(device)
-        decoder = decoder.to(device)
-        self.encoder = encoder
-        self.decoder = decoder
-        self.voc = voc
-        self.pair = pairs
-
-    def forward(self, input_seq, input_length, max_length=MAX_LENGTH):
-        # Forward input through encoder model
-        encoder_outputs, encoder_hidden = self.encoder(input_seq, input_length)
-        # Prepare encoder's final hidden layer to be first hidden input to the decoder
-        decoder_hidden = encoder_hidden[:self.decoder.n_layers]
-        # Initialize decoder input with SOS_token
-        decoder_input = torch.ones(1, 1, device=device, dtype=torch.long) * SOS_token
-        # Initialize tensors to append decoded words to
-        all_tokens = torch.zeros([0], device=device, dtype=torch.long)
-        all_scores = torch.zeros([0], device=device)
-        # Iteratively decode one word token at a time
-        for _ in range(max_length):
-            # Forward pass through decoder
-            decoder_output, decoder_hidden = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
-            # Obtain most likely word token and its softmax score
-            decoder_scores, decoder_input = torch.max(decoder_output, dim=1)
-            # Record token and score
-            all_tokens = torch.cat((all_tokens, decoder_input), dim=0)
-            all_scores = torch.cat((all_scores, decoder_scores), dim=0)
-            # Prepare current token to be next decoder input (add a dimension)
-            decoder_input = torch.unsqueeze(decoder_input, 0)
-        # Return collections of word tokens and scores
-        return all_tokens, all_scores
-
-    def __call__(self, sentence, lang):
-            ### Format input sentence as a batch
-         # words -> indexes
-        indexes_batch = [indexesFromSentence(self.voc, sentence)]
-        # Create lengths tensor
-        lengths = torch.tensor([len(indexes) for indexes in indexes_batch])
-        # Transpose dimensions of batch to match models' expectations
-        input_batch = torch.LongTensor(indexes_batch).transpose(0, 1)
-        # Use appropriate device
-        input_batch = input_batch.to(device)
-        lengths = lengths.to("cpu")
-        # Decode sentence with searcher
-        tokens, scores = self.forward(input_batch, lengths)
-        # indexes -> words
-        decoded_words = [self.voc.index2word[token.item()] for token in tokens]
-        decoded_words[:] = [x for x in decoded_words if not (x == 'EOS' or x == 'PAD')]
-        if lang == 'en':
-            return decoded_words
-
-        return decoded_words[0]
-
+    if inp:
+        evaluateInput(encoder, decoder, voc, beam_size)
+    else:
+        evaluateRandomly(encoder, decoder, voc, pairs, reverse, beam_size, 20)
