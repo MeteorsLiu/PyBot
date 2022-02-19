@@ -468,6 +468,10 @@ async def echo(websocket, path):
         message = json.loads(message)
         if "sender" in message and "message" in message:
             isPrivate = False
+            if "CQ" in message["message"]:
+                if "CQ:at" not in message["message"] and "CQ:reply" not in message["message"]:
+                    #print("Exclude MSG {}".format(message["message"]))
+                    continue
             if "user_id" in message and message["message_type"] == 'private' and not "group_id" in message:
                 isPrivate = True
                 robot.uid = message["user_id"]
@@ -486,8 +490,8 @@ async def main():
 
 
 if __name__ == "__main__":
-    #n_layers, hidden_size, reverse = parseFilename("/home/clean_chat_corpus/pytorch-chatbot/save/model/somefile/1-1_512/10000_backup_bidir_model.tar", False)
-    #zh = Model(n_layers, hidden_size, "/home/clean_chat_corpus/pytorch-chatbot/save/model/somefile/1-1_512/10000_backup_bidir_model.tar", "/home/clean_chat_corpus/somefile")
+    n_layers, hidden_size, reverse = parseFilename("/home/clean_chat_corpus/pytorch-chatbot/save/model/somefile/1-1_512/10000_backup_bidir_model.tar", False)
+    zh = Model(n_layers, hidden_size, "save/model/corpus/1-1_512/10000_backup_bidir_model.tar", "corpus.txt")
     n_layers, hidden_size, reverse = parseFilename("/home/clean_chat_corpus/pytorch-chatbot/save/model/movie_subtitles/1-1_512/50000_backup_bidir_model.tar", False)
     en = Model(n_layers, hidden_size, "/home/clean_chat_corpus/pytorch-chatbot/save/model/movie_subtitles/1-1_512/50000_backup_bidir_model.tar", "/home/clean_chat_corpus/pytorch-chatbot/movie.txt")
     cred = credential.Credential("", "")
@@ -502,7 +506,9 @@ if __name__ == "__main__":
     try:
         loop.run_until_complete(main())
     except KeyboardInterrupt:
+        loop.stop()
         loop.close()
     except:
         raise
+
 
