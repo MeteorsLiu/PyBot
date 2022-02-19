@@ -22,7 +22,7 @@ from tencentcloud.nlp.v20190408 import nlp_client
 from tencentcloud.nlp.v20190408 import models as m
 import re
 from collections import Counter
-from match import Rule
+from match import Rule, ChineseNumConvert
 import jieba
 
 def parseFilename(filename, test=False):
@@ -72,6 +72,7 @@ def getRandom():
 def getReplyByQingyunke(sentence):
     r = requests.get("http://api.qingyunke.com/api.php?key=free&appid=0&msg={}".format(sentence))
     return r.json()["content"]
+
 
 def getTencent(sentence):
     try:
@@ -153,6 +154,29 @@ class Robot(object):
                     "params": {"group_id": self.gid, 
                     "message": "[CQ:video,file={}]".format(l)
             }}))
+    async def sendVoice(self, v):
+        if self.uid:
+            await self.websocket.send(
+                json.dumps(
+                {
+                    "action": "send_msg", 
+                    "params": {
+                        "user_id": self.uid, 
+                        "message": "[CQ:record,file={}]".format(v)
+                    }
+                }
+            ))
+        else:
+            await self.websocket.send(
+                json.dumps(
+                {
+                    "action": "send_group_msg", 
+                    "params": {
+                        "group_id": self.gid, 
+                        "message": "[CQ:record,file={}]".format(v)
+                    }
+                }
+            ))
     async def sendRandomPic(self, times):
         for _ in range(times):
             #print(times)
@@ -208,7 +232,30 @@ class Robot(object):
                 await self.sendMessage(message["error"])
                 return
             await self.sendImage(message["b64"])
-            
+    async def SearchNetease(self, name, num, isRandom=False):
+        for m in range(num):
+            try:
+                params = {
+                    "hlpretag": "",
+                    "hlposttag": "",
+                    "s": name,
+                    "type": 1,
+                    "offset": 0,
+                    "total": True,
+                    "limit": 20
+                }
+                r = requests.post("http://music.163.com/api/search/get/web?csrf_token=", params)
+                message = r.json()
+                #print(message)
+                randlink = message["result"]["songs"][m]
+                #print(randlink)
+                await self.sendMessage("歌曲：{}\n歌手：{}\n专辑：{}".format(randlink["name"], randlink["artists"][0]["name"], randlink["album"]["name"]))
+                r = requests.get("http://music.163.com/song/media/outer/url?id={}.mp3".format(randlink["id"]),allow_redirects=False)
+                await self.sendVoice(r.headers['Location'])
+            except Exception as e:
+                print(e)
+                await self.sendMessage("{}无法搜索".format(name))
+                continue
     async def getWeibo(self, l):
         try:
             r = requests.get("http://172.30.56.22:6700/repost?link={}".format(l))
@@ -249,7 +296,7 @@ class Robot(object):
 
     async def getBaidu(self, s):
         ret = await self.loop.run_in_executor(None , rule.word_segment_text_bank, s)
-        counter = sum(Counter([f for _, f in ret if 'm' in f or 'q' in f]).values())
+        counter = sum(Counter([f for _, f in ret if 'm' in f or 'q' in f or 'LOC' in f or 'PER' in f or 'ORG' in f]).values())
         return (ret, counter)
 
     async def getNonBaidu(self, s):
@@ -263,7 +310,7 @@ class Robot(object):
             self.getNonBaidu(s)
         )
 
-        if tup[0][1] > tup[0][1]:
+        if tup[0][1] > tup[1][1]:
             print(tup[0])
             return tup[0][0]
         else:
@@ -299,6 +346,35 @@ class Robot(object):
             print(ex)
         return flag
     
+    async def matchSinger(self, sentence, e):
+        matched, texts = rule.smatch(sentence, ['搜索', '获取', '歌曲', '音乐'])
+        if matched:
+            nlist = []
+            num = 0
+            for t, f in texts:
+                if 'm' in f or 'q' in f:
+                    if len(t) > 1:
+                        num = ChineseNumConvert(t[:-1])
+                    else:
+                        num = 1
+                    if len(nlist) > 0:
+                        name = ' '.join(nlist)
+                        await self.sendMessage("正在搜索{}{}首歌".format(name, num))
+                        await self.SearchNetease(name, num)
+                        nlist.clear()
+                        num = 0
+                else:
+                    if t == ' ':
+                        continue
+                    nlist.append(t)
+            if len(nlist) > 0:
+                name = ' '.join(nlist)
+                await self.sendMessage("正在搜索{}{}首歌".format(name, num))
+                await self.SearchNetease(name, num)
+                nlist.clear()
+                num = 0
+            e.set()
+                        
 
     async def matchName(self, sentence, e):
         if '叫' not in sentence or len(sentence) > 7:
@@ -412,6 +488,16 @@ async def worker(_t, robot: Robot, isPrivate=False):
         link = re.sub("转发电报(。|，|？|！|\?|\!|\.|\,|：|:)?", '', _t)
         await robot.getTelegram(link)
         return
+    if "点歌" in _t:
+        link = re.sub("点歌(。|，|？|！|\?|\!|\.|\,|：|:)?", '', _t)
+        await robot.SearchNetease(link, 1)
+        return
+
+    if "测试发送" in _t:
+        r = requests.get("http://music.163.com/song/media/outer/url?id=27646205.mp3",allow_redirects=False)
+        await robot.sendVoice(r.headers['Location'])
+        return
+
 
     #动态匹配
     realmessage = None
@@ -437,6 +523,7 @@ async def worker(_t, robot: Robot, isPrivate=False):
             
             await robot.matchAction(wordseg, event)
             await robot.matchPainter(wordseg, event)
+            await robot.matchSinger(wordseg, event)
             await robot.matchFreeLink(wordseg, event)
             
             if event.is_set(): 
