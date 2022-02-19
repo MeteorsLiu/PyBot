@@ -62,7 +62,6 @@ def readVocs(corpus, corpus_name):
     voc = Voc(corpus_name)
     return voc, pairs
 
-
 def filterPair(p):
     # input sequences need to preserve the last word for EOS_token
     return len(p[0].split(' ')) < MAX_LENGTH and \
@@ -74,7 +73,7 @@ def filterPairs(pairs):
 def prepareData(corpus, corpus_name):
     voc, pairs = readVocs(corpus, corpus_name)
     print("Read {!s} sentence pairs".format(len(pairs)))
-    #pairs = filterPairs(pairs)
+    pairs = filterPairs(pairs)
     print("Trimmed to {!s} sentence pairs".format(len(pairs)))
     print("Counting words...")
     for pair in pairs:
@@ -94,8 +93,9 @@ def loadPrepareData(corpus):
         print("Start loading training data ...")
         voc = torch.load(os.path.join(save_dir, 'training_data', corpus_name, 'voc.tar'))
         pairs = torch.load(os.path.join(save_dir, 'training_data', corpus_name, 'pairs.tar'))
-    except:
+    except FileNotFoundError:
         print("Saved data not found, start preparing trianing data ...")
         voc, pairs = prepareData(corpus, corpus_name)
     return voc, pairs
+
 

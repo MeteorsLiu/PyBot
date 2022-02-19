@@ -179,3 +179,26 @@ def runTest(n_layers, hidden_size, reverse, modelFile, beam_size, inp, corpus):
         evaluateInput(encoder, decoder, voc, beam_size)
     else:
         evaluateRandomly(encoder, decoder, voc, pairs, reverse, beam_size, 20)
+
+class Model(object):
+    def __init__(self, n_layers, hidden_size, modelFile, corpus):
+        self.voc, _ = loadPrepareData(corpus)
+        embedding = nn.Embedding(self.voc.n_words, hidden_size)
+        encoder = EncoderRNN(self.voc.n_words, hidden_size, embedding, n_layers)
+        attn_model = 'dot'
+        decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, self.voc.n_words, n_layers)
+
+        checkpoint = torch.load(modelFile, map_location=torch.device('cpu'))
+        encoder.load_state_dict(checkpoint['en'])
+        decoder.load_state_dict(checkpoint['de'])
+
+        # train mode set to false, effect only on dropout, batchNorm
+        encoder.train(False);
+        decoder.train(False);
+
+        self.encoder = encoder.to(device)
+        self.decoder = decoder.to(device)
+    def __call__(self, sentence, lang):
+        decoded_words, _ = evaluate(self.encoder, self.decoder, self.voc, sentence, 1)
+        print(decoded_words)
+        return [x for x in decoded_words if not (x == 'EOS' or x == 'PAD')]
