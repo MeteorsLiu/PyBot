@@ -211,7 +211,7 @@ class Rule(object):
         else:
             rs = self.get_sim(avg/float(avglen), textCopy, keyword)
             print("综合估值: {}".format(rs))
-            if rs >= 0.7:
+            if rs >= 0.71:
                 return True, _texts
         return False, _texts
 

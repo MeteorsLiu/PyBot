@@ -3,6 +3,7 @@ from __future__ import unicode_literals
 #!/usr/bin/env python
 
 import asyncio
+from copy import deepcopy
 from random import randrange
 
 from torch import real
@@ -296,26 +297,29 @@ class Robot(object):
 
     async def getBaidu(self, s):
         ret = await self.loop.run_in_executor(None , rule.word_segment_text_bank, s)
-        counter = sum(Counter([f for _, f in ret if 'm' in f or 'q' in f or 'LOC' in f or 'PER' in f or 'ORG' in f]).values())
-        return (ret, counter)
+        #counter = sum(Counter([f for _, f in ret if 'm' in f or 'q' in f or 'LOC' in f or 'PER' in f or 'ORG' in f]).values())
+        return ret
 
     async def getNonBaidu(self, s):
         ret = await self.loop.run_in_executor(None ,rule.word_segment_text_bank_no_paddle, s)
-        counter = sum(Counter([f for _, f in ret if 'm' in f or 'q' in f]).values())
-        return (ret, counter)
+        #counter = sum(Counter([f for _, f in ret if 'm' in f or 'q' in f or 'n' in f]).values())
+        return ret
 
     async def getF(self, s):
         tup = await asyncio.gather(
             self.getBaidu(s), 
             self.getNonBaidu(s)
         )
-
+        return tup
+        """
         if tup[0][1] > tup[1][1]:
             print(tup[0])
             return tup[0][0]
         else:
+            print("Non Baidu")
             print(tup[1])
             return tup[1][0]
+        """
 
     async def matchAction(self, sentence, e):
         try:
@@ -347,12 +351,15 @@ class Robot(object):
         return flag
     
     async def matchSinger(self, sentence, e):
-        matched, texts = rule.smatch(sentence, ['搜索', '获取', '歌曲', '音乐'])
+        dc = deepcopy(sentence)
+        matched, _ = rule.smatch(sentence, ['搜索', '获取', '歌曲', '音乐'])
         if matched:
             nlist = []
             num = 0
-            for t, f in texts:
+            isStart = False
+            for t, f in dc:
                 if 'm' in f or 'q' in f:
+                    isStart = True
                     if len(t) > 1:
                         num = ChineseNumConvert(t[:-1])
                     else:
@@ -363,9 +370,8 @@ class Robot(object):
                         await self.SearchNetease(name, num)
                         nlist.clear()
                         num = 0
-                else:
-                    if t == ' ':
-                        continue
+                        isStart = False
+                elif isStart:
                     nlist.append(t)
             if len(nlist) > 0:
                 name = ' '.join(nlist)
@@ -490,7 +496,7 @@ async def worker(_t, robot: Robot, isPrivate=False):
         return
     if "点歌" in _t:
         link = re.sub("点歌(。|，|？|！|\?|\!|\.|\,|：|:)?", '', _t)
-        await robot.SearchNetease(link, 1)
+        await robot.SearchNetease(link.strip(), 1)
         return
 
     if "测试发送" in _t:
@@ -521,10 +527,10 @@ async def worker(_t, robot: Robot, isPrivate=False):
             wordseg = await robot.getF(realmessage)
             event = asyncio.Event()
             
-            await robot.matchAction(wordseg, event)
-            await robot.matchPainter(wordseg, event)
-            await robot.matchSinger(wordseg, event)
-            await robot.matchFreeLink(wordseg, event)
+            await robot.matchAction(wordseg[1], event)
+            await robot.matchPainter(wordseg[1], event)
+            await robot.matchSinger(wordseg[0], event)
+            await robot.matchFreeLink(wordseg[1], event)
             
             if event.is_set(): 
                 event.clear()
@@ -577,8 +583,8 @@ async def main():
 
 
 if __name__ == "__main__":
-    n_layers, hidden_size, reverse = parseFilename("/home/clean_chat_corpus/pytorch-chatbot/save/model/somefile/1-1_512/10000_backup_bidir_model.tar", False)
-    zh = Model(n_layers, hidden_size, "save/model/corpus/1-1_512/10000_backup_bidir_model.tar", "corpus.txt")
+    n_layers, hidden_size, reverse = parseFilename("save/model/atri/1-1_256/10000_backup_bidir_model.tar", False)
+    zh = Model(n_layers, hidden_size, "save/model/atri/1-1_256/10000_backup_bidir_model.tar", "atri.txt")
     n_layers, hidden_size, reverse = parseFilename("/home/clean_chat_corpus/pytorch-chatbot/save/model/movie_subtitles/1-1_512/50000_backup_bidir_model.tar", False)
     en = Model(n_layers, hidden_size, "/home/clean_chat_corpus/pytorch-chatbot/save/model/movie_subtitles/1-1_512/50000_backup_bidir_model.tar", "/home/clean_chat_corpus/pytorch-chatbot/movie.txt")
     cred = credential.Credential("", "")
@@ -597,5 +603,3 @@ if __name__ == "__main__":
         loop.close()
     except:
         raise
-
-
