@@ -14,7 +14,6 @@ import base64
 import requests
 from evaluate import *
 import unicodedata
-import contextvars
 from tencentcloud.common import credential
 from tencentcloud.common.profile.client_profile import ClientProfile
 from tencentcloud.common.profile.http_profile import HttpProfile
@@ -295,6 +294,13 @@ class Robot(object):
         except:
             await self.sendMessage("Atri拒绝了该请求")
 
+    async def getYoutube(self, l):
+        try:
+            await self.sendMessage("正在等待服务器响应")
+            await self.sendVoice("http://172.30.56.22:6700/ytb?link={}".format(l))
+        except:
+            await self.sendMessage("Atri拒绝了该请求")
+
     async def getBaidu(self, s):
         ret = await self.loop.run_in_executor(None , rule.word_segment_text_bank, s)
         #counter = sum(Counter([f for _, f in ret if 'm' in f or 'q' in f or 'LOC' in f or 'PER' in f or 'ORG' in f]).values())
@@ -372,6 +378,8 @@ class Robot(object):
                         num = 0
                         isStart = False
                 elif isStart:
+                    if t == "歌" or t == ' ' or t == '歌曲':
+                        continue
                     nlist.append(t)
             if len(nlist) > 0:
                 name = ' '.join(nlist)
@@ -503,7 +511,11 @@ async def worker(_t, robot: Robot, isPrivate=False):
         r = requests.get("http://music.163.com/song/media/outer/url?id=27646205.mp3",allow_redirects=False)
         await robot.sendVoice(r.headers['Location'])
         return
-
+    if "youtube.com/watch?v=" in _t or "https://youtu.be/" in _t:
+        try:
+            await robot.getYoutube(re.search(r"""https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)""", _t).group())
+        except:
+            await robot.sendMessage("未知信息")
 
     #动态匹配
     realmessage = None
@@ -519,6 +531,8 @@ async def worker(_t, robot: Robot, isPrivate=False):
         if "发张图" in realmessage or ("发" in realmessage and "图" in realmessage):
             await robot.sendRandomPic(1)
             return
+
+        
 
         isChinese = False
         if is_all_chinese(realmessage):
@@ -603,3 +617,5 @@ if __name__ == "__main__":
         loop.close()
     except:
         raise
+
+

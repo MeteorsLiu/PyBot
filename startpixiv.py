@@ -233,12 +233,23 @@ def getTelegram(link):
             for m in matchImage:
                 plink = re.sub(r"image:url\(|\'", '', m)
                 #print(plink)
+                if "emoji" in plink:
+                    continue 
                 ret["b64"].append(getPin(plink))
         return json.dumps(ret)
     except:
         raise
         return json.dumps({"error": "TG链接不合法"})
    
+def getY2Mate(link):
+    headers = {
+               'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36',
+               'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+               'accept-language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh-MO;q=0.7,zh;q=0.6'
+    }
+    r = requests.get(url=link, headers=headers)
+    return r.content, r.headers.get("content-length")
+
 
 class Handler(BaseHTTPRequestHandler) :
         # A new Handler is created for every incommming request tho do_XYZ
@@ -248,6 +259,42 @@ class Handler(BaseHTTPRequestHandler) :
             self.send_header('Content-type','text/plain; charset=utf-8')
             self.send_header('Content-length', str(len))
             self.end_headers()
+        def getYoutube(self, link):
+            try:
+                p = {
+                    'url': link,
+                    'q_auto': 0,
+                    'ajax': 1
+                }
+                r = requests.post("https://www.y2mate.com/mates/en249/analyze/ajax", p)
+                s = r.json()['result']
+                if "youtu.be"  in link:
+                    vid = link.replace("https://youtu.be/", "")
+                    print(vid)
+                else:
+                    vid = re.search(r'v=\w+', p["url"]).group().strip("v=")
+                id = re.search(r'''k__id\s+=\s+(["'])(.*?)\1''', s).group().strip('''k__id = "''').strip('''"''')
+                p2 = {
+                    'type': 'youtube',
+                    '_id': id, 
+                    'v_id': vid,
+                    'ajax': 1,
+                    'token': '',
+                    'ftype': 'mp3',
+                    'fquality': 128
+                }
+                #print(id,vid)
+                r = requests.post("https://www.y2mate.com/mates/convert", p2)
+                s=r.json()["result"]
+                c, l = getY2Mate(re.search(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""",s).group().strip('''<a href=''').strip('''"'''))
+                self.send_response(200)
+                self.send_header('Content-type','audio/mpeg')
+                self.send_header('Content-length', l)
+                self.end_headers()
+                self.wfile.write(c)
+
+            except:
+                self.wfile.write("Error".encode('utf-8'))
         def do_GET(self) :
             if "getrandom" in self.path:
                 message = getRandom()
@@ -297,6 +344,12 @@ class Handler(BaseHTTPRequestHandler) :
                     message = getTelegram(query["link"][0])
                     self._set_headers(len(message))
                     self.wfile.write(message.encode('utf-8'))
+            if "ytb" in self.path:
+                query = parse.parse_qs(parse.urlparse(parse.unquote(self.path)).query)
+                if len(query) == 0:
+                    self.wfile.write(json.dumps({"error": "参数错误"}).encode('utf-8'))
+
+                self.getYoutube(query["link"][0])
 
 s = HTTPServer( ('172.30.56.22', 6700), Handler )
 s.serve_forever()
