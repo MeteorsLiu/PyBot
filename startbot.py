@@ -14,12 +14,12 @@ import base64
 import requests
 from evaluate import *
 import unicodedata
-# from tencentcloud.common import credential
-# from tencentcloud.common.profile.client_profile import ClientProfile
-# from tencentcloud.common.profile.http_profile import HttpProfile
-# from tencentcloud.common.exception.tencent_cloud_sdk_exception import TencentCloudSDKException
-# from tencentcloud.nlp.v20190408 import nlp_client
-# from tencentcloud.nlp.v20190408 import models as m
+from tencentcloud.common import credential
+from tencentcloud.common.profile.client_profile import ClientProfile
+from tencentcloud.common.profile.http_profile import HttpProfile
+from tencentcloud.common.exception.tencent_cloud_sdk_exception import TencentCloudSDKException
+from tencentcloud.nlp.v20190408 import nlp_client
+from tencentcloud.nlp.v20190408 import models as m
 import re
 from collections import Counter
 from match import Rule, ChineseNumConvert
@@ -604,17 +604,17 @@ async def main():
 
 
 if __name__ == "__main__":
-    # n_layers, hidden_size, reverse = parseFilename("save/model/atri/1-1_256/10000_backup_bidir_model.tar", False)
-    # zh = Model(n_layers, hidden_size, "save/model/atri/1-1_256/10000_backup_bidir_model.tar", "atri.txt")
-    # n_layers, hidden_size, reverse = parseFilename("/home/clean_chat_corpus/pytorch-chatbot/save/model/movie_subtitles/1-1_512/50000_backup_bidir_model.tar", False)
-    # en = Model(n_layers, hidden_size, "/home/clean_chat_corpus/pytorch-chatbot/save/model/movie_subtitles/1-1_512/50000_backup_bidir_model.tar", "/home/clean_chat_corpus/pytorch-chatbot/movie.txt")
-    # cred = credential.Credential("", "")
-    # httpProfile = HttpProfile()
-    # httpProfile.endpoint = "nlp.tencentcloudapi.com"
-    # rule = Rule()
-    # clientProfile = ClientProfile()
-    # clientProfile.httpProfile = httpProfile
-    # client = nlp_client.NlpClient(cred, "ap-guangzhou", clientProfile)
+    n_layers, hidden_size, reverse = parseFilename("save/model/atri/1-1_256/10000_backup_bidir_model.tar", False)
+    zh = Model(n_layers, hidden_size, "save/model/atri/1-1_256/10000_backup_bidir_model.tar", "atri.txt")
+    n_layers, hidden_size, reverse = parseFilename("/home/clean_chat_corpus/pytorch-chatbot/save/model/movie_subtitles/1-1_512/50000_backup_bidir_model.tar", False)
+    en = Model(n_layers, hidden_size, "/home/clean_chat_corpus/pytorch-chatbot/save/model/movie_subtitles/1-1_512/50000_backup_bidir_model.tar", "/home/clean_chat_corpus/pytorch-chatbot/movie.txt")
+    cred = credential.Credential("", "")
+    httpProfile = HttpProfile()
+    httpProfile.endpoint = "nlp.tencentcloudapi.com"
+    rule = Rule()
+    clientProfile = ClientProfile()
+    clientProfile.httpProfile = httpProfile
+    client = nlp_client.NlpClient(cred, "ap-guangzhou", clientProfile)
 
 
     try:
