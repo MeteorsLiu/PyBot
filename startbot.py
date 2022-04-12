@@ -388,7 +388,7 @@ class Robot(object):
                 nlist.clear()
                 num = 0
             e.set()
-                        
+
 
     async def matchName(self, sentence, e):
         if '叫' not in sentence or len(sentence) > 7:
@@ -506,6 +506,13 @@ async def worker(_t, robot: Robot, isPrivate=False):
         link = re.sub("点歌(。|，|？|！|\?|\!|\.|\,|：|:)?", '', _t)
         await robot.SearchNetease(link.strip(), 1)
         return
+
+    if 'bhot' in _t:
+        await robot.sendMessage('b站热搜来咯~（。＾▽＾）')
+        r = requests.get('http://10.244.110.84:6702/bhot').json()
+        if 'error' in r:
+            await robot.sendMessage(r['error'])
+        await robot.sendMessage(r['msg'])
 
     if "测试发送" in _t:
         r = requests.get("http://music.163.com/song/media/outer/url?id=27646205.mp3",allow_redirects=False)
